@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+:root {
+  --primary: #00362d;
+  --primary-container: #1a4d43;
+
+  --surface: #fbf9f9;
+  --surface-container: #efeded;
+  --surface-container-low: #f5f3f3;
+  --surface-container-high: #e9e8e7;
+
+  --outline: #707976;
+  --outline-variant: #c0c8c5;
+
+  --on-surface: #1b1c1c;
+  --on-surface-variant: #404946;
+}
+
+@theme {
+  --color-primary: var(--primary);
+  --color-primary-container: var(--primary-container);
+
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container-high: var(--surface-container-high);
+
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+
+  --font-sans: 'Inter', sans-serif;
+}
+
+/* Custom typography classes based on DESIGN.md specs */
+.text-display {
+  font-family: 'Inter', sans-serif;
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.text-headline-large {
+  font-family: 'Inter', sans-serif;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.text-headline-medium {
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.text-body {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.text-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.text-small-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+}
+
+.glass-panel-dark {
+  background-color: rgba(0, 54, 45, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Infinite Canvas Grid Pattern */
+.canvas-grid {
+  background-color: #faf8f7; /* Very light warm beige */
+  background-image: radial-gradient(#d5d1cf 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+/* Custom Webkit Scrollbars for premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-container-low);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--outline);
+}
+
+/* Hide default input borders and style focus state */
+.input-premium {
+  background: var(--surface-container-low);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.input-premium:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: var(--outline);
+  box-shadow: 0 0 0 2px rgba(112, 121, 118, 0.1);
+}
