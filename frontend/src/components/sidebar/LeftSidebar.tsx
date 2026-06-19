@@ -11,6 +11,8 @@ interface LeftSidebarProps {
 	selectedNodeId: string | null;
 	onSelectNode: (id: string) => void;
 	onNewBranch?: () => void;
+	projectName?: string;
+	projectDesc?: string;
 }
 
 export function LeftSidebar({
@@ -18,6 +20,8 @@ export function LeftSidebar({
 	selectedNodeId,
 	onSelectNode,
 	onNewBranch,
+	projectName,
+	projectDesc,
 }: LeftSidebarProps) {
 	// Sort versions to display recent ones (nodes with images)
 	const historyNodes = nodes
@@ -35,11 +39,11 @@ export function LeftSidebar({
 		<aside className="w-70 h-full flex flex-col border-r border-[#efeded] bg-white select-none">
 			{/* Project Header */}
 			<div className="p-6 pb-4">
-				<h1 className="text-xl font-bold tracking-tight text-on-surface">
-					Project Alpha
+				<h1 className="text-xl font-bold tracking-tight text-on-surface truncate" title={projectName}>
+					{projectName || "Loading Project..."}
 				</h1>
-				<p className="text-xs text-on-surface-variant mt-0.5 font-medium">
-					Modern Minimalist Loft
+				<p className="text-xs text-on-surface-variant mt-0.5 font-medium truncate" title={projectDesc}>
+					{projectDesc || "Loading description..."}
 				</p>
 			</div>
 

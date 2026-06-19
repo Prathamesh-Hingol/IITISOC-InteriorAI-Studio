@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Upload, Crop, Sparkles, Check, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Upload, Crop, Sparkles, Check, X, Loader2 } from "lucide-react";
 import type { VersionNode } from "../../types";
 
 interface InspectorPanelProps {
@@ -10,14 +10,35 @@ interface InspectorPanelProps {
     strength: number,
     mode: "restyle" | "furnish-empty"
   ) => void;
+  onUploadImage?: (file: File) => void;
+  isUploading?: boolean;
+  isGenerating?: boolean;
 }
 
-export function InspectorPanel({ activeNode, onGenerate }: InspectorPanelProps) {
+export function InspectorPanel({
+  activeNode,
+  onGenerate,
+  onUploadImage,
+  isUploading = false,
+  isGenerating,
+}: InspectorPanelProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onUploadImage) {
+      onUploadImage(file);
+    }
+  };
   const [mode, setMode] = useState<"restyle" | "furnish-empty">("restyle");
   const [prompt, setPrompt] = useState("");
   const [selectedPreset, setSelectedPreset] = useState("Scandinavian");
   const [strength, setStrength] = useState(65);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [localGenerating, setLocalGenerating] = useState(false);
 
   // Sync state with selected node
   useEffect(() => {
@@ -31,16 +52,23 @@ export function InspectorPanel({ activeNode, onGenerate }: InspectorPanelProps) 
 
   const presets = ["Modern", "Minimalist", "Luxury", "Scandinavian", "Industrial"];
 
-  const handleSubmit = (e: React.SubmitEvent) => {
-    e.preventDefault();
-    if (isGenerating) return;
+  const isGeneratingActive = isGenerating !== undefined ? isGenerating : localGenerating;
 
-    setIsGenerating(true);
-    // Mimic API delay
-    setTimeout(() => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGeneratingActive) return;
+
+    if (isGenerating === undefined) {
+      // Fallback local mock simulation if not controlled
+      setLocalGenerating(true);
+      setTimeout(() => {
+        onGenerate(prompt, selectedPreset, strength, mode);
+        setLocalGenerating(false);
+      }, 2000);
+    } else {
+      // Parent handles mutation
       onGenerate(prompt, selectedPreset, strength, mode);
-      setIsGenerating(false);
-    }, 2500);
+    }
   };
 
   return (
@@ -80,17 +108,30 @@ export function InspectorPanel({ activeNode, onGenerate }: InspectorPanelProps) 
           </div>
 
           {/* Action buttons (Upload & Crop) */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="hidden"
+          />
           <div className="grid grid-cols-2 gap-3 mt-3">
             <button
               type="button"
-              className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors"
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors cursor-pointer disabled:opacity-60"
             >
-              <Upload size={14} className="text-on-surface-variant" />
-              <span>Upload</span>
+              {isUploading ? (
+                <Loader2 size={14} className="animate-spin text-on-surface-variant" />
+              ) : (
+                <Upload size={14} className="text-on-surface-variant" />
+              )}
+              <span>{isUploading ? "Uploading..." : "Upload"}</span>
             </button>
             <button
               type="button"
-              className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors"
+              className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors cursor-pointer"
             >
               <Crop size={14} className="text-on-surface-variant" />
               <span>Crop</span>

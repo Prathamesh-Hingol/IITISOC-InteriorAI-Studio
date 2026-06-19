@@ -9,7 +9,6 @@ import {
 	MoreVertical,
 	X,
 	Loader2,
-	Bell,
 	Star,
 	Archive,
 	Clock,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
+import { useGetProjects, useCreateProject } from "../hooks/useProject";
 
 // ── Types ───────────────────────────────────────────────────────
 interface Project {
@@ -29,50 +29,6 @@ interface Project {
 	isFavorite?: boolean;
 	isArchived?: boolean;
 }
-
-// ── Mock Data ───────────────────────────────────────────────────
-const MOCK_PROJECTS: Project[] = [
-	{
-		id: "proj_1",
-		name: "Oak Ridge Loft",
-		description:
-			"Scandinavian inspired open-plan living with textured concrete.",
-		thumbnailUrl:
-			"https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80",
-		versionCount: 12,
-		lastUpdated: "2h ago",
-		isFavorite: true,
-	},
-	{
-		id: "proj_2",
-		name: "Emerald Study",
-		description: "Sophisticated home office with deep hues and brass accents.",
-		thumbnailUrl:
-			"https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=600&q=80",
-		versionCount: 5,
-		lastUpdated: "Oct 12",
-	},
-	{
-		id: "proj_3",
-		name: "Urban Sanctuary",
-		description:
-			"Master bedroom redesign focusing on organic textiles and curves.",
-		thumbnailUrl:
-			"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=600&q=80",
-		versionCount: 24,
-		lastUpdated: "Oct 10",
-		isFavorite: true,
-	},
-	{
-		id: "proj_4",
-		name: "Terra Terrace",
-		description: "Outdoor lounge concept with Mediterranean planting scheme.",
-		thumbnailUrl:
-			"https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=600&q=80",
-		versionCount: 8,
-		lastUpdated: "Oct 08",
-	},
-];
 
 // ── Filter Tabs ─────────────────────────────────────────────────
 type FilterType = "all" | "recent" | "favorites" | "archived";
@@ -134,10 +90,13 @@ export function ProjectsPage() {
 	const [search, setSearch] = useState("");
 	const [activeFilter, setActiveFilter] = useState<FilterType>("all");
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [isCreating, setIsCreating] = useState(false);
 	const [newProjectName, setNewProjectName] = useState("");
 	const [newProjectDesc, setNewProjectDesc] = useState("");
 	const nameInputRef = useRef<HTMLInputElement>(null);
+
+	// Fetch projects using our 4-layer architecture hook
+	const { data: projects = [], isLoading, error } = useGetProjects();
+	const createProjectMutation = useCreateProject();
 
 	// Focus input when modal opens
 	useEffect(() => {
@@ -147,7 +106,7 @@ export function ProjectsPage() {
 	}, [isModalOpen]);
 
 	// ── Filtering ───────────────────────────────────────────────
-	const filteredProjects = MOCK_PROJECTS.filter((project) => {
+	const filteredProjects = projects.filter((project: Project) => {
 		// search filter
 		const matchesSearch =
 			project.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -157,27 +116,34 @@ export function ProjectsPage() {
 		if (activeFilter === "favorites")
 			return matchesSearch && project.isFavorite;
 		if (activeFilter === "archived") return matchesSearch && project.isArchived;
-		// "recent" and "all" show everything for now
 		return matchesSearch;
 	});
 
 	// ── Handlers ────────────────────────────────────────────────
 	const handleCreateProject = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!newProjectName.trim()) return;
-		setIsCreating(true);
-		// Simulate API call
-		setTimeout(() => {
-			setIsCreating(false);
-			setIsModalOpen(false);
-			setNewProjectName("");
-			setNewProjectDesc("");
-		}, 1200);
+		if (!newProjectName.trim() || createProjectMutation.isPending) return;
+
+		createProjectMutation.mutate(
+			{
+				name: newProjectName,
+				description: newProjectDesc,
+			},
+			{
+				onSuccess: (newProject) => {
+					setIsModalOpen(false);
+					setNewProjectName("");
+					setNewProjectDesc("");
+					// Navigate to newly created project's studio space
+					navigate(`/project/${newProject.id}`);
+				},
+			}
+		);
 	};
 
 	const handleOpenProject = (projectId: string) => {
-		// Navigate to studio with the project context
-		navigate(`/studio?project=${projectId}`);
+		// Navigate to the dynamic studio route
+		navigate(`/project/${projectId}`);
 	};
 
 	return (
@@ -194,7 +160,7 @@ export function ProjectsPage() {
 					className="flex flex-col md:flex-row md:items-end justify-between mb-12"
 				>
 					<div>
-						<h1 className="text-display text-primary mb-2">Projects</h1>
+						<h1 className="text-display text-primary mb-2 font-semibold">Projects</h1>
 						<p className="text-body text-on-surface-variant max-w-lg">
 							Manage and organize all your AI-generated interior design
 							projects.
@@ -202,7 +168,7 @@ export function ProjectsPage() {
 					</div>
 					<button
 						onClick={() => setIsModalOpen(true)}
-						className="mt-6 md:mt-0 inline-flex items-center gap-2 px-6 h-12 bg-primary text-white text-sm font-semibold rounded-xl shadow-md hover:bg-primary-container hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+						className="mt-6 md:mt-0 inline-flex items-center gap-2 px-6 h-12 bg-primary text-white text-sm font-semibold rounded-xl shadow-md hover:bg-primary-container hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer"
 					>
 						<Plus size={18} />
 						<span>New Project</span>
@@ -240,7 +206,7 @@ export function ProjectsPage() {
 									<button
 										key={tab.key}
 										onClick={() => setActiveFilter(tab.key)}
-										className={`inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+										className={`inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
 											isActive
 												? "bg-primary text-white shadow-md"
 												: "bg-white text-on-surface-variant hover:bg-[#efeded] shadow-sm"
@@ -255,15 +221,35 @@ export function ProjectsPage() {
 					</div>
 				</motion.section>
 
-				{/* Projects Grid */}
-				{filteredProjects.length > 0 ? (
+				{/* Projects Grid / States */}
+				{isLoading ? (
+					<div className="flex flex-col items-center justify-center py-24 text-center">
+						<Loader2 size={36} className="animate-spin text-primary mb-4" />
+						<h3 className="text-base font-semibold text-on-surface mb-1">
+							Loading projects
+						</h3>
+						<p className="text-xs text-on-surface-variant max-w-sm">
+							Retrieving your interior design spaces from the database...
+						</p>
+					</div>
+				) : error ? (
+					<div className="flex flex-col items-center justify-center py-24 text-center">
+						<X size={36} className="text-red-500 mb-4" />
+						<h3 className="text-base font-semibold text-on-surface mb-1">
+							Failed to load projects
+						</h3>
+						<p className="text-xs text-on-surface-variant max-w-sm">
+							{error.message || "An unexpected error occurred while communicating with the server."}
+						</p>
+					</div>
+				) : filteredProjects.length > 0 ? (
 					<motion.div
 						variants={containerVariants}
 						initial="hidden"
 						animate="visible"
 						className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7"
 					>
-						{filteredProjects.map((project) => (
+						{filteredProjects.map((project: Project) => (
 							<ProjectCard
 								key={project.id}
 								project={project}
@@ -314,16 +300,16 @@ export function ProjectsPage() {
 							initial="hidden"
 							animate="visible"
 							exit="exit"
-							className="relative w-full max-w-md mx-4 p-8 glass-panel rounded-2xl shadow-2xl"
+							className="relative w-full max-w-md mx-4 p-8 glass-panel rounded-2xl shadow-2xl bg-white"
 						>
 							{/* Header */}
 							<div className="flex justify-between items-center mb-6">
-								<h2 className="text-headline-medium text-primary font-semibold">
+								<h2 className="text-2xl text-primary font-semibold">
 									Create New Project
 								</h2>
 								<button
 									onClick={() => setIsModalOpen(false)}
-									className="p-1 text-outline hover:text-primary transition-colors"
+									className="p-1 text-outline hover:text-primary transition-colors cursor-pointer"
 								>
 									<X size={20} />
 								</button>
@@ -344,7 +330,7 @@ export function ProjectsPage() {
 										value={newProjectName}
 										onChange={(e) => setNewProjectName(e.target.value)}
 										placeholder="e.g. Modern Loft Renovation"
-										className="w-full px-4 py-3 bg-white/50 border border-outline-variant rounded-xl text-sm text-on-surface placeholder:text-outline/50 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all outline-none"
+										className="w-full px-4 py-3 bg-white border border-outline-variant rounded-xl text-sm text-on-surface placeholder:text-outline/50 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all outline-none"
 									/>
 								</div>
 
@@ -357,7 +343,7 @@ export function ProjectsPage() {
 										onChange={(e) => setNewProjectDesc(e.target.value)}
 										placeholder="Briefly describe the vision..."
 										rows={3}
-										className="w-full px-4 py-3 bg-white/50 border border-outline-variant rounded-xl text-sm text-on-surface placeholder:text-outline/50 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all outline-none resize-none"
+										className="w-full px-4 py-3 bg-white border border-outline-variant rounded-xl text-sm text-on-surface placeholder:text-outline/50 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all outline-none resize-none"
 									/>
 								</div>
 
@@ -366,20 +352,20 @@ export function ProjectsPage() {
 									<button
 										type="button"
 										onClick={() => setIsModalOpen(false)}
-										className="flex-1 px-5 py-3 border border-outline-variant text-on-surface-variant rounded-xl text-sm font-medium hover:bg-[#f5f3f3] transition-all"
+										className="flex-1 px-5 py-3 border border-outline-variant text-on-surface-variant rounded-xl text-sm font-medium hover:bg-[#f5f3f3] transition-all cursor-pointer"
 									>
 										Cancel
 									</button>
 									<button
 										type="submit"
-										disabled={isCreating || !newProjectName.trim()}
-										className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] ${
-											isCreating || !newProjectName.trim()
+										disabled={createProjectMutation.isPending || !newProjectName.trim()}
+										className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
+											createProjectMutation.isPending || !newProjectName.trim()
 												? "opacity-60 cursor-not-allowed hover:scale-100"
 												: ""
 										}`}
 									>
-										{isCreating ? (
+										{createProjectMutation.isPending ? (
 											<>
 												<Loader2 size={16} className="animate-spin" />
 												<span>Creating...</span>
@@ -412,7 +398,7 @@ function ProjectCard({
 		<motion.div
 			variants={cardVariants}
 			onClick={() => onOpen(project.id)}
-			className="bg-white rounded-2xl overflow-hidden shadow-sm cursor-pointer group transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_10px_30px_-10px_rgba(0,54,45,0.12)]"
+			className="bg-white rounded-2xl overflow-hidden shadow-sm cursor-pointer group transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_10px_30px_-10px_rgba(0,54,45,0.12)] border border-[#efeded]/80"
 		>
 			{/* Thumbnail */}
 			<div className="relative h-48 overflow-hidden">
@@ -445,7 +431,7 @@ function ProjectCard({
 							e.stopPropagation();
 							setMenuOpen(!menuOpen);
 						}}
-						className="p-0.5 text-outline hover:text-primary transition-colors flex-shrink-0"
+						className="p-0.5 text-outline hover:text-primary transition-colors flex-shrink-0 cursor-pointer"
 					>
 						<MoreVertical size={16} />
 					</button>

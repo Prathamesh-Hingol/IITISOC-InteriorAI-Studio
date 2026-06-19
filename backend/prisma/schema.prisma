@@ -1,0 +1,48 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String    @id // Clerk User ID
+  email     String    @unique
+  firstName String?
+  lastName  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  projects  Project[]
+}
+
+model Project {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  generations Generation[]
+}
+
+model Generation {
+  id                 String       @id @default(uuid())
+  title              String
+  projectId          String
+  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId           String?
+  parent             Generation?  @relation("GenerationBranch", fields: [parentId], references: [id], onDelete: Cascade)
+  children           Generation[] @relation("GenerationBranch")
+  imageUrl           String
+  prompt             String?
+  preset             String?
+  creativityStrength Int?
+  generationMode     String? // "restyle" | "furnish-empty"
+  status             String // "pending" | "completed" | "failed"
+  x                  Float?
+  y                  Float?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
