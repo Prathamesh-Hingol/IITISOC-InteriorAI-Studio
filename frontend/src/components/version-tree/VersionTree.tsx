@@ -15,7 +15,7 @@ export function VersionTree({
 	edges,
 	selectedNodeId,
 	onSelectNode,
-	onDeleteNode,
+	// onDeleteNode,
 	onPreviewNode,
 }: VersionTreeProps) {
 	const cardWidth = 200;
