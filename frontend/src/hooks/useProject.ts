@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useAuth } from "@clerk/clerk-react";
 import { ProjectService } from "../services/project.service";
 
@@ -9,6 +9,7 @@ export function useGetProjects() {
     queryKey: ["projects"],
     queryFn: () => ProjectService.getProjects(getToken),
     enabled: isLoaded && isSignedIn,
+    placeholderData:keepPreviousData,
   });
 }
 

@@ -3,7 +3,7 @@ import {
   createProject,
   getProjects,
   getProjectDetail,
-  getProjectTree,
+  getProjectGenerations,
 } from "../controllers/project.controller";
 
 const router = Router();
@@ -12,6 +12,6 @@ const router = Router();
 router.post("/", createProject);
 router.get("/", getProjects);
 router.get("/:projectId", getProjectDetail);
-router.get("/:projectId/tree", getProjectTree);
+router.get("/:projectId/generations", getProjectGenerations);
 
 export default router;

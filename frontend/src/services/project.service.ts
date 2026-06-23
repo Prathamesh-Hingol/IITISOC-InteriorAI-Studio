@@ -13,7 +13,7 @@ export const ProjectService = {
     return projectsApi.detail(projectId, getToken);
   },
 
-  async getProjectTree(projectId: string, selectedNodeId: string | null, getToken: () => Promise<string | null>) {
-    return projectsApi.tree(projectId, selectedNodeId, getToken);
+  async getProjectGenerations(projectId: string, getToken: () => Promise<string | null>) {
+    return projectsApi.generations(projectId, getToken);
   },
 };

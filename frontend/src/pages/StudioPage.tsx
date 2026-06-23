@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { LeftSidebar } from "../components/sidebar/LeftSidebar";
 import { Canvas } from "../components/workspace/Canvas";
@@ -11,7 +11,8 @@ import { InspectorPanel } from "../components/inspector/InspectorPanel";
 import { useCanvas } from "../hooks/useCanvas";
 import { useZoom } from "../hooks/useZoom";
 import { useGetProjectDetail } from "../hooks/useProject";
-import { useGetProjectTree } from "../hooks/useProjectTree";
+import { useGetProjectGenerations } from "../hooks/useProjectTree";
+import { useVersionTree } from "../hooks/useVersionTree";
 import { useCreateGeneration, useDeleteGeneration } from "../hooks/useGeneration";
 import { useUploadImage } from "../hooks/useUpload";
 import type { VersionNode } from "../types";
@@ -32,16 +33,30 @@ export function StudioPage() {
 
 	const { zoom, zoomIn, zoomOut } = useZoom(100, 25, 200, 10);
 
-	// Page selection state
-	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-
 	// Fetch dynamic backend project context
 	const { data: project, isLoading: isProjectLoading } = useGetProjectDetail(projectId);
 	const {
-		data: tree = { nodes: [], edges: [] },
-		isLoading: isTreeLoading,
-		error: treeError,
-	} = useGetProjectTree(projectId, selectedNodeId);
+		data: generations = [],
+		isLoading: isGenerationsLoading,
+		error: generationsError,
+	} = useGetProjectGenerations(projectId);
+
+	// Client-side Version Tree state & layout computation
+	const { nodes, edges, selectedNodeId, selectNode } = useVersionTree(generations);
+
+	// Fullscreen Preview Modal state
+	const [previewNode, setPreviewNode] = useState<VersionNode | null>(null);
+
+	// Escape key handler to close the modal
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				setPreviewNode(null);
+			}
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, []);
 
 	// Mutations
 	const uploadImageMutation = useUploadImage();
@@ -51,22 +66,8 @@ export function StudioPage() {
 	const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
 	const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
-	// Node variables
-	const nodes = tree.nodes || [];
-	const edges = tree.edges || [];
-
-	// Automatically select the active or base node when tree is first loaded
-	useEffect(() => {
-		if (nodes.length > 0 && !selectedNodeId) {
-			const activeNode = nodes.find((n:VersionNode) => n.type === "active") || nodes.find((n:VersionNode) => n.type === "original") || nodes[0];
-			if (activeNode) {
-				setSelectedNodeId(activeNode.id);
-			}
-		}
-	}, [nodes, selectedNodeId]);
-
 	// Find details of the selected node
-	const activeNode = nodes.find((n:VersionNode) => n.id === selectedNodeId) || null;
+	const activeNode = nodes.find((n: VersionNode) => n.id === selectedNodeId) || null;
 
 	const handleGenerate = (
 		prompt: string,
@@ -90,7 +91,7 @@ export function StudioPage() {
 			{
 				onSuccess: (newGen) => {
 					// Select the new node
-					setSelectedNodeId(newGen.id);
+					selectNode(newGen.id);
 					setMobileRightOpen(false);
 				},
 			}
@@ -103,11 +104,11 @@ export function StudioPage() {
 		deleteGenerationMutation.mutate(id, {
 			onSuccess: () => {
 				// Reset selection to root node
-				const rootNode = nodes.find((n:VersionNode) => !n.parentId);
+				const rootNode = nodes.find((n: VersionNode) => !n.parentId);
 				if (rootNode && rootNode.id !== id) {
-					setSelectedNodeId(rootNode.id);
+					selectNode(rootNode.id);
 				} else {
-					setSelectedNodeId(null);
+					selectNode(null);
 				}
 			},
 		});
@@ -126,7 +127,7 @@ export function StudioPage() {
 					},
 					{
 						onSuccess: (newGen) => {
-							setSelectedNodeId(newGen.id);
+							selectNode(newGen.id);
 						},
 					}
 				);
@@ -150,7 +151,7 @@ export function StudioPage() {
 					},
 					{
 						onSuccess: (newGen) => {
-							setSelectedNodeId(newGen.id);
+							selectNode(newGen.id);
 						},
 					}
 				);
@@ -160,15 +161,15 @@ export function StudioPage() {
 
 	const handleNewBranch = () => {
 		// Highlight placeholder or base generation
-		const placeholder = nodes.find((n:VersionNode) => n.type === "placeholder");
+		const placeholder = nodes.find((n: VersionNode) => n.type === "placeholder");
 		if (placeholder) {
-			setSelectedNodeId(placeholder.id);
+			selectNode(placeholder.id);
 		}
 		setMobileLeftOpen(false);
 	};
 
 	// Loading & Error States
-	if (isProjectLoading || isTreeLoading) {
+	if (isProjectLoading || isGenerationsLoading) {
 		return (
 			<div className="h-screen w-screen flex flex-col bg-[#faf8f7]">
 				<Navbar />
@@ -182,7 +183,7 @@ export function StudioPage() {
 		);
 	}
 
-	if (treeError || !projectId) {
+	if (generationsError || !projectId) {
 		return (
 			<div className="h-screen w-screen flex flex-col bg-[#faf8f7]">
 				<Navbar />
@@ -190,7 +191,7 @@ export function StudioPage() {
 					<AlertCircle className="text-red-500 mb-4" size={40} />
 					<h2 className="text-lg font-bold text-primary mb-1">Failed to load Studio</h2>
 					<p className="text-sm text-on-surface-variant max-w-sm mb-6">
-						{treeError?.message || "Workspace does not exist or you do not have permission to view it."}
+						{generationsError?.message || "Workspace does not exist or you do not have permission to view it."}
 					</p>
 					<button
 						onClick={() => navigate("/projects")}
@@ -249,7 +250,7 @@ export function StudioPage() {
 						<LeftSidebar
 							nodes={nodes}
 							selectedNodeId={selectedNodeId}
-							onSelectNode={setSelectedNodeId}
+							onSelectNode={selectNode}
 							onNewBranch={handleNewBranch}
 							projectName={project?.name}
 							projectDesc={project?.description}
@@ -325,8 +326,9 @@ export function StudioPage() {
 								nodes={nodes}
 								edges={edges}
 								selectedNodeId={selectedNodeId}
-								onSelectNode={setSelectedNodeId}
+								onSelectNode={selectNode}
 								onDeleteNode={handleDeleteNode}
+								onPreviewNode={setPreviewNode}
 							/>
 						</Canvas>
 
@@ -353,7 +355,7 @@ export function StudioPage() {
 							{mobileRightOpen && (
 								<button
 									onClick={() => setMobileRightOpen(false)}
-									className="md:hidden absolute top-15 -left-10 p-2.5 bg-white border border-[#efeded] rounded-l-lg shadow-sm cursor-pointer"
+									className="md:hidden absolute top-15 -left-10 p-2.5 bg-white border border-[#efeded] rounded-r-lg shadow-sm cursor-pointer"
 								>
 									<X size={18} />
 								</button>
@@ -375,6 +377,145 @@ export function StudioPage() {
 						onClick={() => setMobileRightOpen(false)}
 					/>
 				)}
+
+				{/* Fullscreen Preview Modal */}
+				<AnimatePresence>
+					{previewNode && (
+						<div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 select-none">
+							{/* Backdrop */}
+							<motion.div
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								exit={{ opacity: 0 }}
+								onClick={() => setPreviewNode(null)}
+								className="absolute inset-0 bg-[#001f1a]/85 backdrop-blur-md pointer-events-auto cursor-pointer"
+							/>
+
+							{/* Modal Content */}
+							<motion.div
+								initial={{ opacity: 0, scale: 0.95, y: 15 }}
+								animate={{ opacity: 1, scale: 1, y: 0 }}
+								exit={{ opacity: 0, scale: 0.95, y: 15 }}
+								transition={{ type: "spring", stiffness: 350, damping: 28 }}
+								className="relative w-full max-w-5xl h-[85vh] md:h-[650px] bg-white rounded-3xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)] border border-[#efeded]/30 flex flex-col md:flex-row pointer-events-auto"
+							>
+								{/* Close button - Absolute top-right */}
+								<button
+									onClick={() => setPreviewNode(null)}
+									className="absolute top-4 right-4 z-10 p-2 bg-[#00362d]/10 hover:bg-[#00362d]/25 text-[#00362d] md:text-white md:bg-black/30 md:hover:bg-black/50 hover:scale-105 active:scale-95 rounded-full transition-all cursor-pointer shadow-sm flex items-center justify-center"
+									title="Close Preview"
+								>
+									<X size={18} />
+								</button>
+
+								{/* Left Column: Visual Pane */}
+								<div className="flex-1 md:h-full bg-black/95 flex items-center justify-center p-4 relative overflow-hidden">
+									{previewNode.image ? (
+										<img
+											src={previewNode.image}
+											alt={previewNode.title}
+											className="w-full h-full object-contain max-h-[40vh] md:max-h-full rounded-lg"
+										/>
+									) : (
+										<div className="w-full h-full flex items-center justify-center text-outline-variant font-medium text-sm">
+											No Preview Image Available
+										</div>
+									)}
+
+									{/* Watermark/Version title overlay */}
+									<div className="absolute bottom-4 left-4 bg-black/40 backdrop-blur-sm px-3.5 py-1.5 rounded-lg border border-white/10 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+										<Eye size={12} className="text-[#3bcca0]" />
+										<span>{previewNode.title} Preview</span>
+									</div>
+								</div>
+
+								{/* Right Column: Metadata Sidebar */}
+								<div className="w-full md:w-[380px] md:h-full bg-[#faf8f7] border-t md:border-t-0 md:border-l border-[#efeded] flex flex-col justify-between p-6 md:p-8 overflow-y-auto">
+									<div className="flex flex-col gap-6">
+										{/* Top Header */}
+										<div>
+											<span className="text-[10px] uppercase tracking-[0.12em] font-bold text-primary/60 bg-primary/5 px-2.5 py-1 rounded-full border border-primary/10">
+												Version Details
+											</span>
+											<h2 className="text-xl font-bold text-primary mt-3 leading-tight">
+												{previewNode.title}
+											</h2>
+											<p className="text-[11px] text-[#707976] mt-1 flex items-center gap-1">
+												<Calendar size={11} />
+												<span>Generated {previewNode.createdAt}</span>
+											</p>
+										</div>
+
+										<hr className="border-[#efeded]" />
+
+										{/* Generation Parameters */}
+										<div className="flex flex-col gap-4">
+											<h3 className="text-xs font-bold uppercase tracking-wider text-primary/80">
+												Parameters
+											</h3>
+
+											{/* Parameter Items */}
+											<div className="grid grid-cols-2 gap-3.5">
+												{/* Preset Style */}
+												<div className="bg-white border border-[#efeded] rounded-xl p-3 shadow-[0_2px_4px_rgba(0,0,0,0.01)]">
+													<span className="text-[10px] font-semibold text-[#707976] block mb-1">Preset Style</span>
+													<span className="text-xs font-bold text-primary flex items-center gap-1">
+														<Sparkles size={12} className="text-primary/70" />
+														{previewNode.preset || "Default"}
+													</span>
+												</div>
+
+												{/* Creativity Strength */}
+												<div className="bg-white border border-[#efeded] rounded-xl p-3 shadow-[0_2px_4px_rgba(0,0,0,0.01)]">
+													<span className="text-[10px] font-semibold text-[#707976] block mb-1">AI Strength</span>
+													<span className="text-xs font-bold text-primary">
+														{previewNode.creativityStrength !== undefined 
+															? `${previewNode.creativityStrength}%` 
+															: "N/A"}
+													</span>
+												</div>
+
+												{/* Mode */}
+												<div className="bg-white border border-[#efeded] rounded-xl p-3 shadow-[0_2px_4px_rgba(0,0,0,0.01)] col-span-2">
+													<span className="text-[10px] font-semibold text-[#707976] block mb-1">Generation Mode</span>
+													<span className="text-xs font-bold text-primary capitalize">
+														{previewNode.generationMode === "restyle" 
+															? "Style Restructuring" 
+															: previewNode.generationMode === "furnish-empty" 
+															? "Furnish Empty Room" 
+															: "Original Upload"}
+													</span>
+												</div>
+											</div>
+										</div>
+
+										{/* AI Prompt */}
+										{previewNode.prompt && (
+											<div className="flex flex-col gap-2">
+												<h3 className="text-xs font-bold uppercase tracking-wider text-primary/80">
+													AI Prompt
+												</h3>
+												<div className="bg-white border border-[#efeded] rounded-xl p-4 shadow-[0_2px_4px_rgba(0,0,0,0.01)] text-xs text-on-surface-variant leading-relaxed italic max-h-[140px] overflow-y-auto">
+													"{previewNode.prompt}"
+												</div>
+											</div>
+										)}
+									</div>
+
+									{/* Bottom Action */}
+									<div className="mt-8 pt-4 border-t border-[#efeded]/65">
+										<button
+											onClick={() => setPreviewNode(null)}
+											className="w-full h-11 bg-primary hover:bg-primary-container text-white text-xs font-bold rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+										>
+											<span>Back to Tree Canvas</span>
+										</button>
+									</div>
+								</div>
+							</motion.div>
+						</div>
+					)}
+				</AnimatePresence>
 			</div>
 		</div>
 	);

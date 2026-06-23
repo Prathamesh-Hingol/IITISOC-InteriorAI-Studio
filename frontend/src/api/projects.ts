@@ -13,10 +13,8 @@ export const projectsApi = {
   detail: (projectId: string, getToken: () => Promise<string | null>) =>
     fetchWithAuth(`/projects/${projectId}`, getToken),
 
-  tree: (projectId: string, selectedNodeId: string | null, getToken: () => Promise<string | null>) => {
-    return fetchWithAuth(`/projects/${projectId}/tree`, getToken, {
-      params: selectedNodeId ? { selectedNodeId } : undefined,
-    });
+  generations: (projectId: string, getToken: () => Promise<string | null>) => {
+    return fetchWithAuth(`/projects/${projectId}/generations`, getToken);
   },
 };
 

@@ -95,12 +95,10 @@ export async function getProjectDetail(req: Request, res: Response, next: NextFu
   }
 }
 
-export async function getProjectTree(req: Request, res: Response, next: NextFunction) {
+export async function getProjectGenerations(req: Request, res: Response, next: NextFunction) {
   try {
     const { projectId } = req.params;
     const userId = req.currentUser!.id;
-    // Client can pass currently selected node to position placeholder child correctly
-    const selectedNodeId = (req.query.selectedNodeId as string) || null;
 
     // Verify ownership
     const project = await prisma.project.findFirst({
@@ -116,12 +114,7 @@ export async function getProjectTree(req: Request, res: Response, next: NextFunc
       orderBy: { createdAt: "asc" },
     });
 
-    if (generations.length === 0) {
-      return res.json({ nodes: [], edges: [] });
-    }
-
-    const tree = layoutTree(generations, selectedNodeId);
-    res.json(tree);
+    res.json(generations);
   } catch (error) {
     next(error);
   }
@@ -143,96 +136,4 @@ function formatTime(date: Date): string {
     month: "short",
     day: "numeric",
   });
-}
-
-// Tree generation layout algorithm
-function layoutTree(generations: any[], selectedNodeId: string | null) {
-  const nodes: any[] = [];
-  const edges: any[] = [];
-
-  // Locate the root node
-  const root = generations.find((g) => g.parentId === null);
-  if (!root) {
-    // If somehow no root has null parentId, pick the oldest one
-    return { nodes, edges };
-  }
-
-  // Map parents to children
-  const childrenMap: Record<string, any[]> = {};
-  generations.forEach((gen) => {
-    if (gen.parentId) {
-      if (!childrenMap[gen.parentId]) {
-        childrenMap[gen.parentId] = [];
-      }
-      childrenMap[gen.parentId].push(gen);
-    }
-  });
-
-  // Recursive positioner
-  function positionNode(node: any, x: number, y: number) {
-    nodes.push({
-      id: node.id,
-      type: node.id === selectedNodeId ? "active" : (node.parentId === null ? "original" : "generated"),
-      title: node.title,
-      image: node.imageUrl,
-      parentId: node.parentId || undefined,
-      createdAt: formatTime(node.createdAt) + (node.creativityStrength !== 0 ? ` • ${node.creativityStrength}% strength` : ""),
-      x,
-      y,
-      prompt: node.prompt || undefined,
-      preset: node.preset || undefined,
-      creativityStrength: node.creativityStrength || undefined,
-      generationMode: node.generationMode || undefined,
-      status: node.status === "completed" ? "Generated" : node.status,
-    });
-
-    const children = childrenMap[node.id] || [];
-    const count = children.length;
-    children.forEach((child, index) => {
-      edges.push({
-        id: `e-${node.id}-${child.id}`,
-        source: node.id,
-        target: child.id,
-      });
-
-      const childX = x + 350;
-      // Symmetric vertical spacing centered on parent Y
-      const offsetY = count === 1 ? 0 : -((count - 1) * 120) + (index * 240);
-      positionNode(child, childX, y + offsetY);
-    });
-  }
-
-  // Layout tree starting from root at coordinates (400, 350)
-  positionNode(root, 400, 350);
-
-  // Add the UI-only "v-placeholder" node under the selected node (or root if selected is invalid or null)
-  let placeholderParentId = root.id;
-  if (selectedNodeId && generations.some((g) => g.id === selectedNodeId)) {
-    placeholderParentId = selectedNodeId;
-  }
-
-  const parentNodeObj = nodes.find((n) => n.id === placeholderParentId);
-  if (parentNodeObj) {
-    const pX = parentNodeObj.x + 350;
-    const existingChildren = childrenMap[placeholderParentId] || [];
-    const pY = parentNodeObj.y - ((existingChildren.length) * 120) + (existingChildren.length * 240);
-
-    nodes.push({
-      id: "v-placeholder",
-      type: "placeholder",
-      title: "New Variation",
-      parentId: placeholderParentId,
-      createdAt: `From ${parentNodeObj.title.split(":")[0]} Base`,
-      x: pX,
-      y: pY,
-    });
-
-    edges.push({
-      id: `e-${placeholderParentId}-placeholder`,
-      source: placeholderParentId,
-      target: "v-placeholder",
-    });
-  }
-
-  return { nodes, edges };
 }
