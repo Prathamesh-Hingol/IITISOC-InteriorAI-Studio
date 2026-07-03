@@ -137,3 +137,17 @@
   border-color: var(--outline);
   box-shadow: 0 0 0 2px rgba(112, 121, 118, 0.1);
 }
+
+/* ─── AI Image Editor ─────────────────────────────────────── */
+
+/* Dark canvas workspace background */
+.editor-workspace {
+  background-color: #1b1c1c;
+  background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Crosshair cursor for brush drawing */
+.editor-cursor-brush {
+  cursor: crosshair;
+}

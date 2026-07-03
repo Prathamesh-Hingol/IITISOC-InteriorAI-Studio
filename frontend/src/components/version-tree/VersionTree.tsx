@@ -8,6 +8,7 @@ interface VersionTreeProps {
 	onSelectNode: (id: string) => void;
 	onDeleteNode?: (id: string) => void;
 	onPreviewNode?: (node: VersionNode) => void;
+	onEditNode?: (node: VersionNode, mode: "interior-modification" | "furniture-placement") => void;
 }
 
 export function VersionTree({
@@ -16,6 +17,7 @@ export function VersionTree({
 	selectedNodeId,
 	onSelectNode,
 	onPreviewNode,
+	onEditNode,
 }: VersionTreeProps) {
 	const cardWidth = 200;
 	const cardHeight = 135;
@@ -182,7 +184,9 @@ export function VersionTree({
 									<button
 										onClick={(e) => {
 											e.stopPropagation();
-											alert("Edit image details");
+											if (onEditNode) {
+												onEditNode(node, "interior-modification");
+											}
 										}}
 										className="p-1.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-colors shadow-sm"
 										title="Edit"

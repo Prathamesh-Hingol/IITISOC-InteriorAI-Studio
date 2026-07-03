@@ -30,4 +30,4 @@ export interface CanvasState {
 
 export type StylePreset = "Modern" | "Minimalist" | "Luxury" | "Scandinavian" | "Industrial";
 
-export type GenerationMode = "restyle" | "furnish-empty";
+export type GenerationMode = "restyle" | "furnish-empty" | "inpaint";

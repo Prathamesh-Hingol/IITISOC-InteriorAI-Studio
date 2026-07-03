@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LandingPage } from "./pages/LandingPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { StudioPage } from "./pages/StudioPage";
+import { EditorPage } from "./pages/EditorPage";
 
 // Initialize TanStack Query Client
 const queryClient = new QueryClient({
@@ -49,6 +50,21 @@ function App() {
                 <>
                   <SignedIn>
                     <StudioPage />
+                  </SignedIn>
+                  <SignedOut>
+                    <RedirectToSignIn signInForceRedirectUrl="/projects" />
+                  </SignedOut>
+                </>
+              }
+            />
+
+            {/* Protected AI Image Editor */}
+            <Route
+              path="/editor/:versionId"
+              element={
+                <>
+                  <SignedIn>
+                    <EditorPage />
                   </SignedIn>
                   <SignedOut>
                     <RedirectToSignIn signInForceRedirectUrl="/projects" />

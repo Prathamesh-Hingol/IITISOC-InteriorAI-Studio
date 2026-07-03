@@ -7,7 +7,10 @@ import { AxiosResponse } from "axios";
 dotenv.config();
 
 interface ModalRes {
-	image_url: string;
+	status: string,
+    cloudinary_url: string,
+    public_id: string,
+    steps_skipped:number,
 }
 
 export const createGenerationSchema = z.object({
@@ -61,23 +64,56 @@ export async function createGeneration(
 		const isRoot = !validatedData.parentId;
 
 		if (isRoot) {
-			// ── Root Node Creation (Original upload) ──
-			if (!validatedData.imageUrl) {
+			// ── Root Node Creation (Original upload or Start from Prompt) ──
+			if (!validatedData.imageUrl && !validatedData.prompt) {
 				return res
 					.status(400)
-					.json({ error: "imageUrl is required for original room upload" });
+					.json({ error: "imageUrl or prompt is required for root room generation" });
+			}
+
+			let imageUrl = validatedData.imageUrl;
+			let title = "V1: Original Base";
+			let promptText = "Original room upload";
+
+			if (!imageUrl && validatedData.prompt) {
+				title = "V1: Text to Image Base";
+				promptText = validatedData.prompt;
+
+				// Generate root node from text prompt using FLUX Schnell
+				const genEndpoint = process.env.GENERATION_ENDPOINT;
+				if (genEndpoint) {
+					try {
+						console.log(`[Root-Gen] Calling FLUX Schnell for text prompt: "${promptText}"`);
+						const response: AxiosResponse<ModalRes> = await axios.post<ModalRes>(
+							genEndpoint,
+							{ prompt: promptText },
+							{ headers: { "Content-Type": "application/json" }, timeout: 90000 }
+						);
+
+						if (response.data?.cloudinary_url) {
+							imageUrl = response.data.cloudinary_url;
+						}
+					} catch (genError: any) {
+						console.error("FLUX Schnell root generation failed, using fallback:", genError.message);
+					}
+				}
+
+				// Fallback if endpoint is not set or failed
+				if (!imageUrl) {
+					imageUrl = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1024&q=80";
+				}
 			}
 
 			const originalNode = await prisma.generation.create({
 				data: {
-					title: "V1: Original Base",
+					title,
 					projectId: validatedData.projectId,
 					parentId: null,
-					imageUrl: validatedData.imageUrl,
-					prompt: "Original room upload",
-					preset: "Minimalist",
-					creativityStrength: 0,
-					generationMode: "restyle",
+					imageUrl: imageUrl!,
+					prompt: promptText,
+					preset: validatedData.preset || "Minimalist",
+					creativityStrength: validatedData.creativityStrength || 0,
+					generationMode: validatedData.generationMode || "restyle",
 					status: "completed",
 				},
 			});
@@ -137,12 +173,12 @@ export async function createGeneration(
 					},
 				},
 			);
-			if (!generationRes.data || !generationRes.data.image_url) {
+			if (!generationRes.data || !generationRes.data.cloudinary_url) {
 				return res.status(500).json({
 					error: "Modal response error",
 				});
 			}
-			const generation_url = generationRes.data.image_url;
+			const generation_url = generationRes.data.cloudinary_url;
 			// 3. Update status to completed and set image URL
 			dbGen = await prisma.generation.update({
 				where: { id: dbGen.id },
