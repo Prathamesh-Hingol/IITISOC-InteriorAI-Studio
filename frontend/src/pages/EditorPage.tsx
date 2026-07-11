@@ -173,25 +173,28 @@ export function EditorPage() {
         </span>
       </div>
 
-      {/* Main workspace: Canvas + Sidebar */}
+      {/* Main workspace: [Candidates Panel?] + Canvas + Sidebar */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Canvas workspace (Layer 1, 2, 3) */}
-        <ImageCanvas
-          imageUrl={imageUrl}
-          segmentationMaskUrl={selection.combinedMask}
-          hoveredMaskUrl={
-            hoveredCandidateIndex !== null ? selection.candidateMasks[hoveredCandidateIndex] : null
-          }
-          isSegmenting={selection.isSegmenting}
-          onSelectPoint={selection.handleSelectPoint}
-        />
-
-        {/* Dynamic Candidate Masks Overlaid Panel */}
+        {/* Left: Candidate selection panel — only visible when candidates are available.
+             Sits beside the canvas so it never overlaps the image. */}
         <MaskCandidatePanel
           candidates={selection.candidateMasks}
           onSelect={selection.handleAcceptCandidate}
           hoveredIndex={hoveredCandidateIndex}
           onHover={setHoveredCandidateIndex}
+        />
+
+        {/* Canvas workspace */}
+        <ImageCanvas
+          imageUrl={imageUrl}
+          overlayUrl={selection.combinedMask}
+          hoveredOverlayUrl={
+            hoveredCandidateIndex !== null
+              ? (selection.candidateMasks[hoveredCandidateIndex]?.overlay_url ?? null)
+              : null
+          }
+          isSegmenting={selection.isSegmenting}
+          onSelectPoint={selection.handleSelectPoint}
         />
 
         {/* Right parameters and upload sidebar */}
@@ -201,7 +204,10 @@ export function EditorPage() {
           selectionCount={selection.selectionCount}
           isSegmenting={selection.isSegmenting}
           isGenerating={editor.isGenerating}
-          onUndo={selection.handleUndoSelection}
+          clickLabels={selection.clickLabels}
+          selectedClickIndices={selection.selectedClickIndices}
+          onToggleClickIndex={selection.toggleClickIndex}
+          onRemoveClicks={selection.handleRemoveClicks}
           onClearSelection={selection.handleClearSelection}
           onGenerate={() => editor.handleGenerate(selection.combinedMask || "")}
           mode={mode}

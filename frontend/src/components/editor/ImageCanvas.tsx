@@ -22,22 +22,28 @@ function fitInsideBox(
 
 interface ImageCanvasProps {
   imageUrl: string; // Cloudinary URL of the original image
-  segmentationMaskUrl: string | null; // Cloudinary URL of the combined mask
-  hoveredMaskUrl: string | null; // Data URL of the hovered candidate mask
+  /** URL of the current combined selection overlay (full pre-rendered image from SAM).
+   * When set, it is shown on top of the base image.
+   * When null, only the base image is shown. */
+  overlayUrl: string | null;
+  /** URL of the hovered candidate's overlay image for live preview.
+   * Shown with reduced opacity above the accepted overlay. */
+  hoveredOverlayUrl: string | null;
   isSegmenting: boolean;
   onSelectPoint: (point: Point) => void;
 }
 
 /**
  * Three-layer stack for click-based SAM editor canvas.
- * Layer 1: Original Image
- * Layer 2: SelectionOverlay (semi-transparent green combined mask + blue hovered mask preview)
- * Layer 3: Click-capture interaction region
+ * Layer 1: Original Image (base room photo)
+ * Layer 2: Accepted combined selection overlay (full pre-rendered SAM image)
+ * Layer 2b: Hovered candidate preview (shown while browsing candidates)
+ * Layer 3: Click-capture interaction region + loading indicator
  */
 export function ImageCanvas({
   imageUrl,
-  segmentationMaskUrl,
-  hoveredMaskUrl,
+  overlayUrl,
+  hoveredOverlayUrl,
   isSegmenting,
   onSelectPoint,
 }: ImageCanvasProps) {
@@ -135,7 +141,6 @@ export function ImageCanvas({
     );
   }
 
-  const { width: naturalW, height: naturalH } = naturalDims;
   const { width: displayW, height: displayH } = displayDims;
 
   return (
@@ -151,7 +156,7 @@ export function ImageCanvas({
         }`}
         style={{ width: displayW, height: displayH }}
       >
-        {/* Layer 1: Room Image */}
+        {/* Layer 1: Room Image (base) */}
         <img
           src={imageUrl}
           alt="Room Workspace"
@@ -159,13 +164,21 @@ export function ImageCanvas({
           draggable={false}
         />
 
-        {/* Layer 2: Selection Overlay (combined + hovered candidate preview) */}
-        <SelectionOverlay
-          width={naturalW}
-          height={naturalH}
-          maskUrl={segmentationMaskUrl}
-          hoveredMaskUrl={hoveredMaskUrl}
-        />
+        {/* Layer 2: Accepted combined selection overlay (full pre-rendered SAM image).
+            Shown at full opacity once a candidate is accepted. */}
+        <SelectionOverlay overlayUrl={overlayUrl} />
+
+        {/* Layer 2b: Hovered candidate preview — shown while browsing the candidate panel.
+            Shown at reduced opacity so the user can preview before committing. */}
+        {hoveredOverlayUrl && !overlayUrl && (
+          <img
+            src={hoveredOverlayUrl}
+            alt="Candidate preview"
+            className="absolute inset-0 w-full h-full object-fill pointer-events-none transition-opacity duration-150"
+            style={{ zIndex: 3, opacity: 0.75 }}
+            draggable={false}
+          />
+        )}
 
         {/* Layer 3: Click feedback loader (pulsing target cursor) */}
         {isSegmenting && clickPos && (

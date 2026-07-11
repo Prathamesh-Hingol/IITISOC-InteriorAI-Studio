@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Upload, Crop, Sparkles, Check, Loader2, Image as ImageIcon, Paintbrush, Armchair } from "lucide-react";
+import { Upload, Crop, Sparkles, Check, Loader2, Image as ImageIcon, Paintbrush, Armchair, MousePointer2 } from "lucide-react";
+import { DragModePanel } from "../drag/DragModePanel";
 import type { VersionNode } from "../../types";
 
 interface InspectorPanelProps {
@@ -14,9 +15,10 @@ interface InspectorPanelProps {
   onEditNode: (node: VersionNode, mode: "interior-modification" | "furniture-placement") => void;
   isUploading?: boolean;
   isGenerating?: boolean;
+  getToken?: () => Promise<string | null>;
 }
 
-type StudioActionTab = "text-to-image" | "interior-modification" | "furniture-placement";
+type StudioActionTab = "text-to-image" | "interior-modification" | "furniture-placement" | "object-move";
 
 export function InspectorPanel({
   activeNode,
@@ -25,6 +27,7 @@ export function InspectorPanel({
   onEditNode,
   isUploading = false,
   isGenerating,
+  getToken,
 }: InspectorPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -87,7 +90,7 @@ export function InspectorPanel({
 
       {/* Tab Selector */}
       <div className="p-3 border-b border-[#efeded] bg-[#faf8f7]/50">
-        <div className="grid grid-cols-3 gap-1 bg-[#efeded]/60 p-1 rounded-xl">
+        <div className="grid grid-cols-4 gap-1 bg-[#efeded]/60 p-1 rounded-xl">
           <button
             type="button"
             onClick={() => setActiveTab("text-to-image")}
@@ -127,59 +130,76 @@ export function InspectorPanel({
             <Armchair size={14} />
             <span>Furniture</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("object-move")}
+            title="Move Objects"
+            className={`flex flex-col items-center gap-1 py-2 text-[10px] font-bold rounded-lg transition-all ${
+              activeTab === "object-move"
+                ? "bg-white text-primary shadow-[0_2px_8px_rgba(0,54,45,0.04)]"
+                : "text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            <MousePointer2 size={14} />
+            <span>Move</span>
+          </button>
         </div>
       </div>
 
       {/* Scrollable Form Content */}
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-        {/* Room Image Preview Card (Always visible) */}
-        <div className="relative group">
-          <div className="aspect-video w-full rounded-xl overflow-hidden bg-[#efeded] border border-[#efeded] relative">
-            {activeNode?.image ? (
-              <img
-                src={activeNode.image}
-                alt={activeNode.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-outline">
-                No image preview
+        {activeTab !== "object-move" && (
+          <>
+            {/* Room Image Preview Card (Always visible) */}
+            <div className="relative group">
+              <div className="aspect-video w-full rounded-xl overflow-hidden bg-[#efeded] border border-[#efeded] relative">
+                {activeNode?.image ? (
+                  <img
+                    src={activeNode.image}
+                    alt={activeNode.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-outline">
+                    No image preview
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            className="hidden"
-          />
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <button
-              type="button"
-              onClick={handleUploadClick}
-              disabled={isUploading || !activeNode}
-              className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors cursor-pointer disabled:opacity-60"
-            >
-              {isUploading ? (
-                <Loader2 size={14} className="animate-spin text-on-surface-variant" />
-              ) : (
-                <Upload size={14} className="text-on-surface-variant" />
-              )}
-              <span>Upload</span>
-            </button>
-            <button
-              type="button"
-              disabled={!activeNode}
-              className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors cursor-pointer disabled:opacity-60"
-            >
-              <Crop size={14} className="text-on-surface-variant" />
-              <span>Crop</span>
-            </button>
-          </div>
-        </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                className="hidden"
+              />
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <button
+                  type="button"
+                  onClick={handleUploadClick}
+                  disabled={isUploading || !activeNode}
+                  className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {isUploading ? (
+                    <Loader2 size={14} className="animate-spin text-on-surface-variant" />
+                  ) : (
+                    <Upload size={14} className="text-on-surface-variant" />
+                  )}
+                  <span>Upload</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!activeNode}
+                  className="flex items-center justify-center gap-1.5 h-9 text-xs font-semibold text-on-surface bg-white hover:bg-[#f5f3f3] border border-[#c0c8c5] rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <Crop size={14} className="text-on-surface-variant" />
+                  <span>Crop</span>
+                </button>
+              </div>
+            </div>
 
-        <hr className="border-[#efeded]" />
+            <hr className="border-[#efeded]" />
+          </>
+        )}
 
         {/* Tab-specific Content */}
         {activeTab === "text-to-image" && (
@@ -339,6 +359,13 @@ export function InspectorPanel({
               <span>Open Furniture Workspace</span>
             </button>
           </div>
+        )}
+
+        {activeTab === "object-move" && (
+          <DragModePanel
+            activeNode={activeNode}
+            getToken={getToken || (async () => null)}
+          />
         )}
       </div>
     </aside>

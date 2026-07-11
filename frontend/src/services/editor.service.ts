@@ -7,6 +7,7 @@ import type {
   AcceptCandidateResponse,
   ActionRequest,
   ActionResponse,
+  RemoveClicksRequest,
   GenerateRequest,
   GenerateResponse,
 } from "../types/editor";
@@ -26,11 +27,11 @@ export const EditorService = {
     return editorApi.acceptCandidate(payload, getToken);
   },
 
-  async undoSelection(
-    payload: ActionRequest,
+  async removeClicks(
+    payload: RemoveClicksRequest,
     getToken: () => Promise<string | null>,
   ): Promise<ActionResponse> {
-    return editorApi.undoSelection(payload, getToken);
+    return editorApi.removeClicks(payload, getToken);
   },
 
   async clearSelection(

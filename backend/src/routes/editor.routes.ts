@@ -2,7 +2,7 @@ import { Router } from "express";
 import {
   segment,
   acceptCandidate,
-  undoSelection,
+  removeClicks,
   clearSelection,
   generate,
 } from "../controllers/editor.controller";
@@ -15,8 +15,8 @@ router.post("/segment", segment);
 // POST /api/editor/accept-candidate — Accept a candidate mask
 router.post("/accept-candidate", acceptCandidate);
 
-// POST /api/editor/undo-selection — Undo the last accepted mask
-router.post("/undo-selection", undoSelection);
+// POST /api/editor/remove-clicks — Remove selected click indices from session
+router.post("/remove-clicks", removeClicks);
 
 // POST /api/editor/clear-selection — Clear the selection session
 router.post("/clear-selection", clearSelection);

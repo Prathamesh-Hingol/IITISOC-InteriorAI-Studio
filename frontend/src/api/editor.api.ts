@@ -6,6 +6,7 @@ import type {
   AcceptCandidateResponse,
   ActionRequest,
   ActionResponse,
+  RemoveClicksRequest,
   GenerateRequest,
   GenerateResponse,
 } from "../types/editor";
@@ -29,11 +30,11 @@ export const editorApi = {
       body: payload,
     }),
 
-  undoSelection: (
-    payload: ActionRequest,
+  removeClicks: (
+    payload: RemoveClicksRequest,
     getToken: () => Promise<string | null>,
   ): Promise<ActionResponse> =>
-    fetchWithAuth<ActionResponse>("/editor/undo-selection", getToken, {
+    fetchWithAuth<ActionResponse>("/editor/remove-clicks", getToken, {
       method: "POST",
       body: payload,
     }),

@@ -1,12 +1,12 @@
 import {
   Paintbrush,
-  Undo2,
   Trash2,
   Sparkles,
   Loader2,
   CheckCircle2,
   Circle,
   Armchair,
+  X,
 } from "lucide-react";
 import { FurnitureReferenceUpload } from "./FurnitureReferenceUpload";
 import type { EditorMode } from "../../types/editor";
@@ -17,7 +17,10 @@ interface EditorSidebarProps {
   selectionCount: number;
   isSegmenting: boolean;
   isGenerating: boolean;
-  onUndo: () => void;
+  clickLabels: string[];
+  selectedClickIndices: number[];
+  onToggleClickIndex: (index: number) => void;
+  onRemoveClicks: () => void;
   onClearSelection: () => void;
   onGenerate: () => void;
   mode: EditorMode;
@@ -31,13 +34,16 @@ interface EditorSidebarProps {
  * Right sidebar panel for the AI Image Editor.
  * Tailored dynamically based on the Mode (Interior Modification vs Furniture Placement).
  */
-export function EditorSidebar({
+export function   EditorSidebar({
   prompt,
   onPromptChange,
   selectionCount,
   isSegmenting,
   isGenerating,
-  onUndo,
+  clickLabels,
+  selectedClickIndices,
+  onToggleClickIndex,
+  onRemoveClicks,
   onClearSelection,
   onGenerate,
   mode,
@@ -46,12 +52,12 @@ export function EditorSidebar({
   onReferenceUpload,
 }: EditorSidebarProps) {
   const isFurnitureMode = mode === "furniture-placement";
-  
-  // Generation is enabled if we have at least one object segment selected, a design prompt,
-  // and we are not currently executing segmentation or generation requests.
+
   const hasSelection = selectionCount > 0;
   const hasPrompt = prompt.trim().length > 0;
-  const canGenerate = hasSelection && hasPrompt && !isGenerating && !isSegmenting && !isUploadingReference;
+  const canGenerate =
+    hasSelection && hasPrompt && !isGenerating && !isSegmenting && !isUploadingReference;
+  const hasSelectedForRemoval = selectedClickIndices.length > 0;
 
   return (
     <div className="w-[320px] h-full bg-white border-l border-[#efeded] flex flex-col justify-between overflow-y-auto select-none">
@@ -99,7 +105,9 @@ export function EditorSidebar({
             ) : hasSelection ? (
               <>
                 <CheckCircle2 size={14} />
-                <span>{selectionCount} Object{selectionCount > 1 ? "s" : ""} Highlighted</span>
+                <span>
+                  {selectionCount} Object{selectionCount > 1 ? "s" : ""} Highlighted
+                </span>
               </>
             ) : (
               <>
@@ -110,31 +118,74 @@ export function EditorSidebar({
           </div>
         </div>
 
-        {/* ─── Interactive Actions (Undo/Clear) ──────────────── */}
+        {/* ─── Selection History ──────────────────────────────── */}
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-bold uppercase tracking-wider text-[#707976]">
             Selection History
           </label>
-          <div className="flex gap-2">
+
+          {clickLabels.length === 0 ? (
+            <p className="text-[11px] text-[#c0c8c5] italic px-1">
+              No clicks recorded yet.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {clickLabels.map((label, arrayIndex) => {
+                const originalIndex = parseInt(label.replace("Click #", ""), 10);
+                const isSelected = selectedClickIndices.includes(originalIndex);
+                return (
+                  <button
+                    key={arrayIndex}
+                    type="button"
+                    onClick={() => onToggleClickIndex(originalIndex)}
+                    disabled={isSegmenting || isGenerating}
+                    title={isSelected ? `Deselect ${label}` : `Select ${label} for removal`}
+                    className={`flex items-center justify-between w-full px-3 py-2 rounded-lg border text-[11px] font-medium transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                      isSelected
+                        ? "bg-red-50 border-red-300 text-red-600 shadow-sm"
+                        : "bg-[#f5f3f3] border-[#efeded] text-[#1b1c1c] hover:bg-[#ede9e8] hover:border-[#c0c8c5]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          isSelected
+                            ? "bg-red-500 text-white"
+                            : "bg-[#00362d]/10 text-[#00362d]"
+                        }`}
+                      >
+                        {originalIndex}
+                      </span>
+                      {label}
+                    </span>
+                    {isSelected && <X size={12} className="text-red-500 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Remove Selected + Clear All actions */}
+          <div className="flex gap-2 mt-1">
             <button
               type="button"
-              onClick={onUndo}
-              disabled={!hasSelection || isSegmenting || isGenerating}
-              title="Undo Last Highlight"
-              className="flex-1 flex items-center justify-center gap-1.5 h-9 text-[11px] font-semibold rounded-lg border border-[#efeded] bg-white text-[#1b1c1c] hover:bg-[#f5f3f3] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              onClick={onRemoveClicks}
+              disabled={!hasSelectedForRemoval || isSegmenting || isGenerating}
+              title="Remove selected clicks from mask"
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 text-[11px] font-semibold rounded-lg border border-red-200 bg-white text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
-              <Undo2 size={13} />
-              Undo
+              <X size={12} />
+              Remove{hasSelectedForRemoval ? ` (${selectedClickIndices.length})` : ""}
             </button>
             <button
               type="button"
               onClick={onClearSelection}
               disabled={!hasSelection || isSegmenting || isGenerating}
-              title="Clear Highlights"
-              className="flex-1 flex items-center justify-center gap-1.5 h-9 text-[11px] font-semibold rounded-lg border border-[#efeded] bg-white text-red-500 hover:bg-red-50 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="Clear All Highlights"
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 text-[11px] font-semibold rounded-lg border border-[#efeded] bg-white text-[#707976] hover:bg-[#f5f3f3] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
-              <Trash2 size={13} />
-              Clear
+              <Trash2 size={12} />
+              Clear All
             </button>
           </div>
         </div>

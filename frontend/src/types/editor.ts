@@ -15,8 +15,15 @@ export interface SegmentRequest {
   y: number;
 }
 
+/** A single candidate returned by the SAM /segment/click endpoint. */
+export interface SegmentCandidate {
+  candidate_index: number;
+  score: number;
+  overlay_url: string; // Complete pre-rendered image: original room + highlighted mask region
+}
+
 export interface SegmentResponse {
-  candidateMasks: string[]; // List of base64 PNG data URLs or image URLs
+  candidateMasks: SegmentCandidate[];
 }
 
 export interface AcceptCandidateRequest {
@@ -34,6 +41,11 @@ export interface ActionRequest {
 
 export interface ActionResponse {
   combinedMaskUrl: string | null;
+}
+
+export interface RemoveClicksRequest {
+  versionId: string;
+  clickIndices: number[];
 }
 
 export interface GenerateRequest {
@@ -58,7 +70,7 @@ export interface GenerateResponse {
 export interface EditorState {
   originalImage: string;
   currentMode: EditorMode;
-  candidateMasks: string[];
+  candidateMasks: SegmentCandidate[];
   selectedCandidateIndex: number | null;
   combinedMask: string | null;
   prompt: string;

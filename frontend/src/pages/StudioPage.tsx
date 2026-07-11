@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
@@ -20,6 +21,7 @@ import type { VersionNode } from "../types";
 export function StudioPage() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const navigate = useNavigate();
+	const { getToken } = useAuth();
 
 	const {
 		pan,
@@ -463,6 +465,7 @@ export function StudioPage() {
 								onEditNode={handleEditNode}
 								isUploading={uploadImageMutation.isPending}
 								isGenerating={createGenerationMutation.isPending}
+								getToken={getToken}
 							/>
 						</div>
 					</div>
