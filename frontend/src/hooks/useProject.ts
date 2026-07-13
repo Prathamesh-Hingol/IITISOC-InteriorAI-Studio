@@ -35,3 +35,30 @@ export function useCreateProject() {
     },
   });
 }
+
+export function useUpdateProject() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, name, description }: { projectId: string; name: string; description: string }) =>
+      ProjectService.updateProject(projectId, name, description, getToken),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.projectId] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      ProjectService.deleteProject(projectId, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+}

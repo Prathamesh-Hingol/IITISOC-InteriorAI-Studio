@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, RefreshCw, ZoomIn } from "lucide-react";
+import { X, RefreshCw } from "lucide-react";
 import type { DragObjectMeta } from "../../types/drag";
 
 interface DraggableObjectCanvasProps {

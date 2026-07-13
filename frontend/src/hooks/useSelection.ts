@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { EditorService } from "../services/editor.service";
 import type { Point, SegmentCandidate } from "../types/editor";
 
@@ -16,6 +16,20 @@ export function useSelection(
   const [clickLabels, setClickLabels] = useState<string[]>([]);
   // Which click indices the user has toggled for removal
   const [selectedClickIndices, setSelectedClickIndices] = useState<number[]>([]);
+  // Unique counter for clicks to avoid numbering conflicts upon removal
+  const [nextClickId, setNextClickId] = useState(0);
+
+  // Reset selection states when versionId changes
+  useEffect(() => {
+    setCandidateMasks([]);
+    setSelectedCandidateIndex(null);
+    setCombinedMask(null);
+    setIsSegmenting(false);
+    setSelectionCount(0);
+    setClickLabels([]);
+    setSelectedClickIndices([]);
+    setNextClickId(0);
+  }, [versionId]);
 
   const clearCandidates = useCallback(() => {
     setCandidateMasks([]);
@@ -57,7 +71,8 @@ export function useSelection(
           getToken
         );
         setCombinedMask(res.combinedMaskUrl);
-        setClickLabels((labels) => [...labels, `Click #${labels.length}`]);
+        setClickLabels((labels) => [...labels, `Click #${nextClickId}`]);
+        setNextClickId((prevId) => prevId + 1);
         setSelectionCount((prev) => prev + 1);
         clearCandidates();
       } catch (err) {
@@ -66,7 +81,7 @@ export function useSelection(
         setIsSegmenting(false);
       }
     },
-    [versionId, getToken, clearCandidates]
+    [versionId, getToken, clearCandidates, nextClickId]
   );
 
   /** Toggle a click index in/out of the removal selection. */
@@ -113,6 +128,7 @@ export function useSelection(
       setSelectionCount(0);
       setClickLabels([]);
       setSelectedClickIndices([]);
+      setNextClickId(0);
       clearCandidates();
     } catch (err) {
       console.error("Failed to clear selection:", err);
@@ -120,6 +136,7 @@ export function useSelection(
       setIsSegmenting(false);
     }
   }, [versionId, getToken, clearCandidates]);
+
 
   return {
     candidateMasks,

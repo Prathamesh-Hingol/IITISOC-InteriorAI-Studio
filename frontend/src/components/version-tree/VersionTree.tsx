@@ -1,4 +1,4 @@
-import { Edit2, Eye, MoreHorizontal, ImagePlus } from "lucide-react";
+import { Eye, Trash2, ImagePlus } from "lucide-react";
 import type { VersionNode, VersionEdge } from "../../types";
 
 interface VersionTreeProps {
@@ -8,7 +8,6 @@ interface VersionTreeProps {
 	onSelectNode: (id: string) => void;
 	onDeleteNode?: (id: string) => void;
 	onPreviewNode?: (node: VersionNode) => void;
-	onEditNode?: (node: VersionNode, mode: "interior-modification" | "furniture-placement") => void;
 }
 
 export function VersionTree({
@@ -17,7 +16,7 @@ export function VersionTree({
 	selectedNodeId,
 	onSelectNode,
 	onPreviewNode,
-	onEditNode,
+	onDeleteNode,
 }: VersionTreeProps) {
 	const cardWidth = 200;
 	const cardHeight = 135;
@@ -180,19 +179,7 @@ export function VersionTree({
 								)}
 
 								{/* Hover overlay with action buttons */}
-								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-all duration-200">
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											if (onEditNode) {
-												onEditNode(node, "interior-modification");
-											}
-										}}
-										className="p-1.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-colors shadow-sm"
-										title="Edit"
-									>
-										<Edit2 size={12} />
-									</button>
+								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-3 transition-all duration-200">
 									<button
 										onClick={(e) => {
 											e.stopPropagation();
@@ -200,21 +187,22 @@ export function VersionTree({
 												onPreviewNode(node);
 											}
 										}}
-										className="p-1.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-colors shadow-sm"
+										className="p-2.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
 										title="Preview"
 									>
-										<Eye size={12} />
+										<Eye size={14} />
 									</button>
 									<button
 										onClick={(e) => {
 											e.stopPropagation();
-
-											alert("More options");
+											if (onDeleteNode) {
+												onDeleteNode(node.id);
+											}
 										}}
-										className="p-1.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-colors shadow-sm"
-										title="Options"
+										className="p-2.5 cursor-pointer bg-white/95 hover:bg-red-50 text-red-500 rounded-full transition-all shadow-sm hover:scale-110"
+										title="Delete"
 									>
-										<MoreHorizontal size={12} />
+										<Trash2 size={14} />
 									</button>
 								</div>
 							</div>

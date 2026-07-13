@@ -52,7 +52,7 @@ export function EditorPage() {
   const [isLoadingVersion, setIsLoadingVersion] = useState(!state?.version?.image);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Hover state for candidate masks
+  // Hover state for candidate masks (furniture-placement only)
   const [hoveredCandidateIndex, setHoveredCandidateIndex] = useState<number | null>(null);
 
   // Fetch version on refresh (when router state is missing)
@@ -92,10 +92,10 @@ export function EditorPage() {
     }
   }, [state]);
 
-  // 1. Selection state layer hook
-  const selection = useSelection(versionId || "", getToken);
+  // Segmentation hook — only active for furniture-placement (pass empty string in modify mode to keep hook unconditional but idle)
+  const selection = useSelection(mode === "furniture-placement" ? (versionId || "") : "", getToken);
 
-  // 2. Editor prompt & generation action hook
+  // Editor prompt & generation action hook
   const editor = useEditor(versionId || "", projectId, mode, getToken);
 
   const handleBack = () => {
@@ -175,26 +175,27 @@ export function EditorPage() {
 
       {/* Main workspace: [Candidates Panel?] + Canvas + Sidebar */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left: Candidate selection panel — only visible when candidates are available.
-             Sits beside the canvas so it never overlaps the image. */}
-        <MaskCandidatePanel
-          candidates={selection.candidateMasks}
-          onSelect={selection.handleAcceptCandidate}
-          hoveredIndex={hoveredCandidateIndex}
-          onHover={setHoveredCandidateIndex}
-        />
+        {/* Candidate panel — only in furniture-placement mode */}
+        {mode === "furniture-placement" && (
+          <MaskCandidatePanel
+            candidates={selection.candidateMasks}
+            onSelect={selection.handleAcceptCandidate}
+            hoveredIndex={hoveredCandidateIndex}
+            onHover={setHoveredCandidateIndex}
+          />
+        )}
 
         {/* Canvas workspace */}
         <ImageCanvas
           imageUrl={imageUrl}
-          overlayUrl={selection.combinedMask}
+          overlayUrl={mode === "furniture-placement" ? selection.combinedMask : null}
           hoveredOverlayUrl={
-            hoveredCandidateIndex !== null
+            mode === "furniture-placement" && hoveredCandidateIndex !== null
               ? (selection.candidateMasks[hoveredCandidateIndex]?.overlay_url ?? null)
               : null
           }
-          isSegmenting={selection.isSegmenting}
-          onSelectPoint={selection.handleSelectPoint}
+          isSegmenting={mode === "furniture-placement" ? selection.isSegmenting : false}
+          onSelectPoint={mode === "furniture-placement" ? selection.handleSelectPoint : undefined}
         />
 
         {/* Right parameters and upload sidebar */}
@@ -210,6 +211,7 @@ export function EditorPage() {
           onRemoveClicks={selection.handleRemoveClicks}
           onClearSelection={selection.handleClearSelection}
           onGenerate={() => editor.handleGenerate(selection.combinedMask || "")}
+          onModify={editor.handleModify}
           mode={mode}
           referenceUrl={editor.furnitureReferenceUrl}
           isUploadingReference={editor.isUploadingReference}

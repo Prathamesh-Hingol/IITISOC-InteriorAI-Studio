@@ -30,7 +30,7 @@ interface ImageCanvasProps {
    * Shown with reduced opacity above the accepted overlay. */
   hoveredOverlayUrl: string | null;
   isSegmenting: boolean;
-  onSelectPoint: (point: Point) => void;
+  onSelectPoint?: (point: Point) => void;
 }
 
 /**
@@ -104,7 +104,7 @@ export function ImageCanvas({
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const container = containerRef.current;
-    if (!container || !naturalDims || isSegmenting) return;
+    if (!container || !naturalDims || isSegmenting || !onSelectPoint) return;
 
     const rect = container.getBoundingClientRect();
     const scaleX = naturalDims.width / rect.width;
@@ -150,9 +150,13 @@ export function ImageCanvas({
     >
       <div
         ref={containerRef}
-        onClick={handleContainerClick}
+        onClick={onSelectPoint ? handleContainerClick : undefined}
         className={`relative select-none rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${
-          isSegmenting ? "cursor-wait" : "cursor-crosshair hover:ring-2 hover:ring-primary/20"
+          !onSelectPoint
+            ? "cursor-default"
+            : isSegmenting
+              ? "cursor-wait"
+              : "cursor-crosshair hover:ring-2 hover:ring-primary/20"
         }`}
         style={{ width: displayW, height: displayH }}
       >

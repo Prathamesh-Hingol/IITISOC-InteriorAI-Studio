@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Upload, Crop, Sparkles, Check, Loader2, Image as ImageIcon, Paintbrush, Armchair, MousePointer2 } from "lucide-react";
+import { Upload, Crop, Loader2, Paintbrush, Armchair, MousePointer2 } from "lucide-react";
 import { DragModePanel } from "../drag/DragModePanel";
 import type { VersionNode } from "../../types";
 
@@ -18,7 +18,7 @@ interface InspectorPanelProps {
   getToken?: () => Promise<string | null>;
 }
 
-type StudioActionTab = "text-to-image" | "interior-modification" | "furniture-placement" | "object-move";
+type StudioActionTab = "interior-modification" | "furniture-placement" | "object-move";
 
 export function InspectorPanel({
   activeNode,
@@ -43,13 +43,12 @@ export function InspectorPanel({
   };
 
   // State
-  const [activeTab, setActiveTab] = useState<StudioActionTab>("text-to-image");
+  const [activeTab, setActiveTab] = useState<StudioActionTab>("interior-modification");
   const [prompt, setPrompt] = useState("");
   const [selectedPreset, setSelectedPreset] = useState("Scandinavian");
   const [strength, setStrength] = useState(65);
-  const [localGenerating, setLocalGenerating] = useState(false);
 
-  // Sync state with selected node
+  // Sync prompt, preset, and strength with selected node
   useEffect(() => {
     if (activeNode) {
       setPrompt(activeNode.prompt || "");
@@ -57,24 +56,6 @@ export function InspectorPanel({
       setStrength(activeNode.creativityStrength !== undefined ? activeNode.creativityStrength : 65);
     }
   }, [activeNode]);
-
-  const presets = ["Modern", "Minimalist", "Luxury", "Scandinavian", "Industrial"];
-  const isGeneratingActive = isGenerating !== undefined ? isGenerating : localGenerating;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isGeneratingActive || !activeNode) return;
-
-    if (isGenerating === undefined) {
-      setLocalGenerating(true);
-      setTimeout(() => {
-        onGenerate(prompt, selectedPreset, strength, "restyle");
-        setLocalGenerating(false);
-      }, 2000);
-    } else {
-      onGenerate(prompt, selectedPreset, strength, "restyle");
-    }
-  };
 
   return (
     <aside className="w-[320px] h-full flex flex-col border-l border-[#efeded] bg-white select-none">
@@ -90,20 +71,7 @@ export function InspectorPanel({
 
       {/* Tab Selector */}
       <div className="p-3 border-b border-[#efeded] bg-[#faf8f7]/50">
-        <div className="grid grid-cols-4 gap-1 bg-[#efeded]/60 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setActiveTab("text-to-image")}
-            title="Text to Image"
-            className={`flex flex-col items-center gap-1 py-2 text-[10px] font-bold rounded-lg transition-all ${
-              activeTab === "text-to-image"
-                ? "bg-white text-primary shadow-[0_2px_8px_rgba(0,54,45,0.04)]"
-                : "text-on-surface-variant hover:text-on-surface"
-            }`}
-          >
-            <ImageIcon size={14} />
-            <span>Generate</span>
-          </button>
+        <div className="grid grid-cols-3 gap-1 bg-[#efeded]/60 p-1 rounded-xl">
           <button
             type="button"
             onClick={() => setActiveTab("interior-modification")}
@@ -202,9 +170,9 @@ export function InspectorPanel({
         )}
 
         {/* Tab-specific Content */}
-        {activeTab === "text-to-image" && (
-          <form onSubmit={handleSubmit} className="flex-1 flex flex-col gap-5">
-            {/* Design Prompt */}
+        {activeTab === "interior-modification" && (
+          <div className="flex flex-col gap-4 flex-1">
+            {/* Prompt */}
             <div className="flex flex-col gap-2">
               <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider text-[#707976]">
                 Design Prompt
@@ -214,39 +182,37 @@ export function InspectorPanel({
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe your design vision... e.g. 'A minimalist Japandi style room with wooden accents and warm lighting'"
                 disabled={!activeNode}
-                className="w-full h-24 p-3 text-xs text-on-surface bg-[#faf8f7] border border-[#efeded] rounded-xl focus:outline-none focus:bg-white focus:border-primary/20 resize-none placeholder-outline"
+                rows={4}
+                className="w-full p-3 text-xs text-on-surface placeholder:text-outline/60 bg-[#faf8f7] border border-[#efeded] rounded-xl focus:outline-none focus:border-primary/20 focus:bg-white resize-none transition-all"
               />
             </div>
 
-            {/* Presets */}
+            {/* Style Presets */}
             <div className="flex flex-col gap-2.5">
               <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider text-[#707976]">
                 Style Presets
               </h3>
               <div className="flex flex-wrap gap-2">
-                {presets.map((preset) => {
-                  const isSelected = selectedPreset === preset;
-                  return (
-                    <button
-                      type="button"
-                      key={preset}
-                      disabled={!activeNode}
-                      onClick={() => setSelectedPreset(preset)}
-                      className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${
-                        isSelected
-                          ? "border-primary text-primary bg-[#cbf4ec]/20"
-                          : "border-[#c0c8c5] text-on-surface-variant hover:text-on-surface hover:border-[#707976]"
-                      }`}
-                    >
-                      {isSelected && <Check size={12} className="text-primary" />}
-                      <span>{preset}</span>
-                    </button>
-                  );
-                })}
+                {["Modern", "Minimalist", "Luxury", "Scandinavian", "Industrial"].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    disabled={!activeNode}
+                    onClick={() => setSelectedPreset(p)}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${
+                      selectedPreset === p
+                        ? "border-primary text-primary bg-[#cbf4ec]/20"
+                        : "border-[#c0c8c5] text-on-surface-variant hover:text-on-surface hover:border-[#707976]"
+                    }`}
+                  >
+                    {selectedPreset === p && <span className="w-2 h-2 rounded-full bg-primary inline-block" />}
+                    {p}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* AI Strength */}
+            {/* AI Creativity Strength */}
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider text-[#707976]">
@@ -263,64 +229,46 @@ export function InspectorPanel({
                 onChange={(e) => setStrength(Number(e.target.value))}
                 className="w-full accent-primary h-1.5 bg-[#efeded] rounded-lg cursor-pointer"
               />
+              <div className="flex justify-between text-[10px] text-outline/70 px-0.5">
+                <span>Conservative</span>
+                <span>Creative</span>
+              </div>
             </div>
 
             {/* Generate Button */}
             <div className="mt-auto pt-4 border-t border-[#efeded]">
               <button
-                type="submit"
-                disabled={isGeneratingActive || !activeNode || !prompt.trim()}
-                className={`w-full flex items-center justify-center gap-2 h-11 text-xs font-bold text-white bg-[#00362d] hover:bg-[#1a4d43] active:scale-[0.99] rounded-xl shadow-md transition-all ${
-                  isGeneratingActive || !activeNode || !prompt.trim()
-                    ? "opacity-60 cursor-not-allowed"
-                    : "cursor-pointer"
+                type="button"
+                disabled={!activeNode || !prompt.trim() || isGenerating}
+                onClick={() => {
+                  if (activeNode && prompt.trim()) {
+                    onGenerate(prompt.trim(), selectedPreset, strength, "restyle");
+                    setPrompt("");
+                  }
+                }}
+                className={`w-full flex items-center justify-center gap-2 h-11 text-xs font-bold rounded-xl shadow-md transition-all ${
+                  activeNode && prompt.trim() && !isGenerating
+                    ? "bg-[#00362d] hover:bg-[#1a4d43] text-white hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    : "bg-[#efeded] text-[#c0c8c5] cursor-not-allowed"
                 }`}
               >
-                <Sparkles size={14} className={isGeneratingActive ? "animate-spin" : ""} />
-                <span>{isGeneratingActive ? "Generating..." : "Generate Variation"}</span>
+                {isGenerating ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Paintbrush size={14} />
+                    <span>Apply Modification</span>
+                  </>
+                )}
               </button>
               <div className="flex justify-between items-center text-[10px] text-outline mt-2 px-0.5">
-                <span>Est. time: ~3s</span>
-                <span>Uses FLUX Schnell</span>
+                <span>Est. time: ~5–10s</span>
+                <span>Context Pipeline</span>
               </div>
             </div>
-          </form>
-        )}
-
-        {activeTab === "interior-modification" && (
-          <div className="flex flex-col gap-4 flex-1">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider text-[#707976]">
-                Interior Modification
-              </h3>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                Add, remove, or modify items within the scene by clicking directly on objects and describing changes.
-              </p>
-            </div>
-
-            <div className="bg-[#faf8f7] border border-[#efeded] rounded-2xl p-4 flex flex-col gap-3">
-              <div className="text-[11px] text-primary/80 font-bold flex items-center gap-1.5">
-                <Paintbrush size={13} />
-                <span>Workspace highlights</span>
-              </div>
-              <ul className="text-[11px] text-on-surface-variant space-y-1.5 list-disc pl-4">
-                <li>Click objects to segment automatically</li>
-                <li>Multiple masks compiled into single combined edit</li>
-                <li>Replaces colors, textures, and structures</li>
-              </ul>
-            </div>
-
-            <button
-              type="button"
-              disabled={!activeNode}
-              onClick={() => activeNode && onEditNode(activeNode, "interior-modification")}
-              className={`w-full flex items-center justify-center gap-2 h-11 text-xs font-bold text-white bg-primary hover:bg-primary-container rounded-xl shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                !activeNode ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-              }`}
-            >
-              <Paintbrush size={14} />
-              <span>Open Object Editor</span>
-            </button>
           </div>
         )}
 

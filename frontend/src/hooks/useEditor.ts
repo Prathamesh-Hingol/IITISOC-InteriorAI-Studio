@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { EditorService } from "../services/editor.service";
 import { UploadService } from "../services/upload.service";
+import { generationsApi } from "../api/generations";
 import type { EditorMode } from "../types/editor";
 
 export function useEditor(
@@ -38,6 +39,7 @@ export function useEditor(
     [getToken]
   );
 
+  /** Used by furniture-placement mode (requires a SAM mask). */
   const handleGenerate = useCallback(
     async (combinedMask: string) => {
       if (!combinedMask || !prompt.trim() || isGenerating) return;
@@ -55,7 +57,12 @@ export function useEditor(
           getToken
         );
 
-        // Navigate back to the project workspace and select the new node
+        try {
+          await EditorService.clearSelection({ versionId }, getToken);
+        } catch (clearErr) {
+          console.error("Failed to clear selection session:", clearErr);
+        }
+
         navigate(`/project/${projectId}`, {
           state: { selectNodeId: res.generation.id },
         });
@@ -68,6 +75,38 @@ export function useEditor(
     [versionId, projectId, prompt, furnitureReferenceUrl, mode, isGenerating, getToken, navigate]
   );
 
+  /**
+   * Used by interior-modification mode (prompt-only, no mask).
+   * Routes through createGeneration — child node path uses the context pipeline.
+   */
+  const handleModify = useCallback(
+    async () => {
+      if (!prompt.trim() || isGenerating || !projectId) return;
+
+      setIsGenerating(true);
+      try {
+        const res: any = await generationsApi.create(
+          {
+            projectId,
+            parentId: versionId,
+            prompt: prompt.trim(),
+            generationMode: "restyle",
+          },
+          getToken
+        );
+
+        navigate(`/project/${projectId}`, {
+          state: { selectNodeId: res.id },
+        });
+      } catch (err) {
+        console.error("Modify generation failed:", err);
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [projectId, versionId, prompt, isGenerating, getToken, navigate]
+  );
+
   return {
     prompt,
     setPrompt,
@@ -77,5 +116,6 @@ export function useEditor(
     isGenerating,
     handleReferenceUpload,
     handleGenerate,
+    handleModify,
   };
 }

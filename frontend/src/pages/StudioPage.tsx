@@ -426,7 +426,6 @@ export function StudioPage() {
 								onSelectNode={selectNode}
 								onDeleteNode={handleDeleteNode}
 								onPreviewNode={setPreviewNode}
-								onEditNode={handleEditNode}
 							/>
 						</Canvas>
 

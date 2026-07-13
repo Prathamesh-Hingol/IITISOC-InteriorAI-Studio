@@ -13,6 +13,14 @@ export const ProjectService = {
     return projectsApi.detail(projectId, getToken);
   },
 
+  async updateProject(projectId: string, name: string, description: string, getToken: () => Promise<string | null>) {
+    return projectsApi.update(projectId, name, description, getToken);
+  },
+
+  async deleteProject(projectId: string, getToken: () => Promise<string | null>) {
+    return projectsApi.delete(projectId, getToken);
+  },
+
   async getProjectGenerations(projectId: string, getToken: () => Promise<string | null>) {
     return projectsApi.generations(projectId, getToken);
   },

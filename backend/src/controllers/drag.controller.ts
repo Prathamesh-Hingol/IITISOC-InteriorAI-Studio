@@ -16,10 +16,10 @@ const extractDragSchema = z.object({
 // ─── Python Microservice Response Shape ──────────────────────
 
 interface DragEndpointResponse {
-	background_url: string;
+	clean_bg_url: string;
 	cutout_url: string;
-	depth_url: string;
-	meta: {
+	depth_preview_url: string;
+	placement_meta: {
 		bbox: { x0: number; y0: number; x1: number; y1: number };
 		centroid: { x: number; y: number };
 		cutout_size: { width: number; height: number };
@@ -32,14 +32,14 @@ interface DragEndpointResponse {
 /**
  * Returns a mock response when DRAG_ENDPOINT is not configured.
  * Uses the original image as a stand-in for all visual assets, with
- * a synthetic meta object centred on the clicked point.
+ * a synthetic placement_meta object centred on the clicked point.
  */
 function buildMockResponse(imageUrl: string, x: number, y: number): DragEndpointResponse {
 	return {
-		background_url: imageUrl,
+		clean_bg_url: imageUrl,
 		cutout_url: imageUrl,
-		depth_url: imageUrl,
-		meta: {
+		depth_preview_url: imageUrl,
+		placement_meta: {
 			bbox: { x0: Math.max(0, x - 64), y0: Math.max(0, y - 64), x1: x + 64, y1: y + 64 },
 			centroid: { x, y },
 			cutout_size: { width: 128, height: 128 },
@@ -63,7 +63,7 @@ function buildMockResponse(imageUrl: string, x: number, y: number): DragEndpoint
  * This controller is a pure authenticated passthrough — no Cloudinary work here.
  *
  * Response:
- *   { backgroundUrl, cutoutUrl, depthUrl, meta }
+ *   { backgroundUrl, cutoutUrl, depthUrl, placement_meta }
  */
 export async function extractDrag(
 	req: Request,
@@ -90,26 +90,26 @@ export async function extractDrag(
 
 				const pythonResponse: AxiosResponse<DragEndpointResponse> =
 					await axios.post<DragEndpointResponse>(
-						`${dragEndpoint}/drag`,
+						`${dragEndpoint}/extract`,
 						{
 							image_url: validated.imageUrl,
-							x: validated.x,
-							y: validated.y,
+							cx: validated.x,
+							cy: validated.y,
 						},
 						{
 							headers: { "Content-Type": "application/json" },
-							timeout: 120000, // 2 min — SAM2 + LaMa + depth can be slow
+							// timeout: 120000, // 2 min — SAM2 + LaMa + depth can be slow
 						},
 					);
 
-				const { background_url, cutout_url, depth_url, meta } =
+				const { clean_bg_url, cutout_url, depth_preview_url, placement_meta } =
 					pythonResponse.data;
 
 				return res.json({
-					backgroundUrl: background_url,
+					backgroundUrl: clean_bg_url,
 					cutoutUrl: cutout_url,
-					depthUrl: depth_url,
-					meta,
+					depthUrl: depth_preview_url,
+					meta:placement_meta,
 				});
 			} catch (dragError: any) {
 				console.error(
@@ -125,10 +125,10 @@ export async function extractDrag(
 		const mock = buildMockResponse(validated.imageUrl, validated.x, validated.y);
 
 		return res.json({
-			backgroundUrl: mock.background_url,
+			backgroundUrl: mock.clean_bg_url,
 			cutoutUrl: mock.cutout_url,
-			depthUrl: mock.depth_url,
-			meta: mock.meta,
+			depthUrl: mock.depth_preview_url,
+			meta: mock.placement_meta,
 		});
 	} catch (error) {
 		if (error instanceof z.ZodError) {

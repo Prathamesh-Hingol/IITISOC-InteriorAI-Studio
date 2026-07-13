@@ -13,6 +13,10 @@ interface ModalRes {
     steps_skipped:number,
 }
 
+interface kontextRes {
+	"output_url":string,
+}
+
 export const createGenerationSchema = z.object({
 	projectId: z.string().uuid("Invalid project ID"),
 	parentId: z.string().uuid("Invalid parent ID").nullable().optional(),
@@ -85,9 +89,9 @@ export async function createGeneration(
 					try {
 						console.log(`[Root-Gen] Calling FLUX Schnell for text prompt: "${promptText}"`);
 						const response: AxiosResponse<ModalRes> = await axios.post<ModalRes>(
-							genEndpoint,
+							`${genEndpoint}/generate`,
 							{ prompt: promptText },
-							{ headers: { "Content-Type": "application/json" }, timeout: 90000 }
+							{ headers: { "Content-Type": "application/json" }}
 						);
 
 						if (response.data?.cloudinary_url) {
@@ -161,8 +165,9 @@ export async function createGeneration(
 
 			// Choose image preset URL
 			// const mockImage = MOCK_IMAGES[preset] || MOCK_IMAGES.Scandinavian;
-			const generationRes: AxiosResponse<ModalRes> = await axios.post<ModalRes>(
-				process.env.GENERATION_ENDPOINT as string,
+			const kontextEndpoint=process.env.GENERATION_ENDPOINT2
+			const generationRes: AxiosResponse<kontextRes> = await axios.post<kontextRes>(
+				`${kontextEndpoint}/generate`,
 				{
 					prompt,
 					image_url: parentNode.imageUrl,
@@ -173,12 +178,12 @@ export async function createGeneration(
 					},
 				},
 			);
-			if (!generationRes.data || !generationRes.data.cloudinary_url) {
+			if (!generationRes.data || !generationRes.data.output_url) {
 				return res.status(500).json({
 					error: "Modal response error",
 				});
 			}
-			const generation_url = generationRes.data.cloudinary_url;
+			const generation_url = generationRes.data.output_url;
 			// 3. Update status to completed and set image URL
 			dbGen = await prisma.generation.update({
 				where: { id: dbGen.id },
@@ -254,3 +259,4 @@ export async function deleteGeneration(
 		next(error);
 	}
 }
+

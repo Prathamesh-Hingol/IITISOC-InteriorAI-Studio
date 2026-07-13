@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
-import { useGetProjects, useCreateProject } from "../hooks/useProject";
+import {
+	useGetProjects,
+	useCreateProject,
+	useUpdateProject,
+	useDeleteProject,
+} from "../hooks/useProject";
 
 // ── Types ───────────────────────────────────────────────────────
 interface Project {
@@ -94,9 +99,20 @@ export function ProjectsPage() {
 	const [newProjectDesc, setNewProjectDesc] = useState("");
 	const nameInputRef = useRef<HTMLInputElement>(null);
 
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+	const [editingProject, setEditingProject] = useState<Project | null>(null);
+	const [editProjectName, setEditProjectName] = useState("");
+	const [editProjectDesc, setEditProjectDesc] = useState("");
+	const editNameInputRef = useRef<HTMLInputElement>(null);
+
+	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+	const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+
 	// Fetch projects using our 4-layer architecture hook
 	const { data: projects = [], isLoading, error } = useGetProjects();
 	const createProjectMutation = useCreateProject();
+	const updateProjectMutation = useUpdateProject();
+	const deleteProjectMutation = useDeleteProject();
 
 	// Focus input when modal opens
 	useEffect(() => {
@@ -104,6 +120,12 @@ export function ProjectsPage() {
 			setTimeout(() => nameInputRef.current?.focus(), 100);
 		}
 	}, [isModalOpen]);
+
+	useEffect(() => {
+		if (isEditModalOpen) {
+			setTimeout(() => editNameInputRef.current?.focus(), 100);
+		}
+	}, [isEditModalOpen]);
 
 	// ── Filtering ───────────────────────────────────────────────
 	const filteredProjects = projects.filter((project: Project) => {
@@ -139,6 +161,50 @@ export function ProjectsPage() {
 				},
 			}
 		);
+	};
+
+	const handleUpdateProject = (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingProject || !editProjectName.trim() || updateProjectMutation.isPending) return;
+
+		updateProjectMutation.mutate(
+			{
+				projectId: editingProject.id,
+				name: editProjectName,
+				description: editProjectDesc,
+			},
+			{
+				onSuccess: () => {
+					setIsEditModalOpen(false);
+					setEditingProject(null);
+					setEditProjectName("");
+					setEditProjectDesc("");
+				},
+			}
+		);
+	};
+
+	const handleDeleteProject = () => {
+		if (!deletingProject || deleteProjectMutation.isPending) return;
+
+		deleteProjectMutation.mutate(deletingProject.id, {
+			onSuccess: () => {
+				setIsDeleteModalOpen(false);
+				setDeletingProject(null);
+			},
+		});
+	};
+
+	const triggerEditProject = (project: Project) => {
+		setEditingProject(project);
+		setEditProjectName(project.name);
+		setEditProjectDesc(project.description);
+		setIsEditModalOpen(true);
+	};
+
+	const triggerDeleteProject = (project: Project) => {
+		setDeletingProject(project);
+		setIsDeleteModalOpen(true);
 	};
 
 	const handleOpenProject = (projectId: string) => {
@@ -254,6 +320,8 @@ export function ProjectsPage() {
 								key={project.id}
 								project={project}
 								onOpen={handleOpenProject}
+								onEdit={triggerEditProject}
+								onDelete={triggerDeleteProject}
 							/>
 						))}
 					</motion.div>
@@ -380,6 +448,181 @@ export function ProjectsPage() {
 					</div>
 				)}
 			</AnimatePresence>
+
+			{/* ── Edit Project Modal ──────────────────────────── */}
+			<AnimatePresence>
+				{isEditModalOpen && (
+					<div className="fixed inset-0 z-[100] flex items-center justify-center">
+						{/* Backdrop */}
+						<motion.div
+							variants={overlayVariants}
+							initial="hidden"
+							animate="visible"
+							exit="exit"
+							onClick={() => setIsEditModalOpen(false)}
+							className="absolute inset-0 bg-primary/30 backdrop-blur-sm"
+						/>
+
+						{/* Modal Content */}
+						<motion.div
+							variants={modalVariants}
+							initial="hidden"
+							animate="visible"
+							exit="exit"
+							className="relative w-full max-w-md mx-4 p-8 glass-panel rounded-2xl shadow-2xl bg-white"
+						>
+							{/* Header */}
+							<div className="flex justify-between items-center mb-6">
+								<h2 className="text-2xl text-primary font-semibold">
+									Edit Project Details
+								</h2>
+								<button
+									onClick={() => setIsEditModalOpen(false)}
+									className="p-1 text-outline hover:text-primary transition-colors cursor-pointer"
+								>
+									<X size={20} />
+								</button>
+							</div>
+
+							{/* Form */}
+							<form
+								onSubmit={handleUpdateProject}
+								className="flex flex-col gap-5"
+							>
+								<div>
+									<label className="block text-sm font-medium text-primary mb-2">
+										Project Name
+									</label>
+									<input
+										ref={editNameInputRef}
+										type="text"
+										value={editProjectName}
+										onChange={(e) => setEditProjectName(e.target.value)}
+										placeholder="e.g. Modern Loft Renovation"
+										className="w-full px-4 py-3 bg-white border border-outline-variant rounded-xl text-sm text-on-surface placeholder:text-outline/50 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all outline-none"
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-primary mb-2">
+										Description
+									</label>
+									<textarea
+										value={editProjectDesc}
+										onChange={(e) => setEditProjectDesc(e.target.value)}
+										placeholder="Briefly describe the vision..."
+										rows={3}
+										className="w-full px-4 py-3 bg-white border border-outline-variant rounded-xl text-sm text-on-surface placeholder:text-outline/50 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all outline-none resize-none"
+									/>
+								</div>
+
+								{/* Actions */}
+								<div className="flex gap-3 pt-2">
+									<button
+										type="button"
+										onClick={() => setIsEditModalOpen(false)}
+										className="flex-1 px-5 py-3 border border-outline-variant text-on-surface-variant rounded-xl text-sm font-medium hover:bg-[#f5f3f3] transition-all cursor-pointer"
+									>
+										Cancel
+									</button>
+									<button
+										type="submit"
+										disabled={updateProjectMutation.isPending || !editProjectName.trim()}
+										className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
+											updateProjectMutation.isPending || !editProjectName.trim()
+												? "opacity-60 cursor-not-allowed hover:scale-100"
+												: ""
+										}`}
+									>
+										{updateProjectMutation.isPending ? (
+											<>
+												<Loader2 size={16} className="animate-spin" />
+												<span>Saving...</span>
+											</>
+										) : (
+											<span>Save Changes</span>
+										)}
+									</button>
+								</div>
+							</form>
+						</motion.div>
+					</div>
+				)}
+			</AnimatePresence>
+
+			{/* ── Delete Project Modal ──────────────────────────── */}
+			<AnimatePresence>
+				{isDeleteModalOpen && (
+					<div className="fixed inset-0 z-[100] flex items-center justify-center">
+						{/* Backdrop */}
+						<motion.div
+							variants={overlayVariants}
+							initial="hidden"
+							animate="visible"
+							exit="exit"
+							onClick={() => setIsDeleteModalOpen(false)}
+							className="absolute inset-0 bg-primary/30 backdrop-blur-sm"
+						/>
+
+						{/* Modal Content */}
+						<motion.div
+							variants={modalVariants}
+							initial="hidden"
+							animate="visible"
+							exit="exit"
+							className="relative w-full max-w-md mx-4 p-8 glass-panel rounded-2xl shadow-2xl bg-white"
+						>
+							{/* Header */}
+							<div className="flex justify-between items-center mb-4">
+								<h2 className="text-xl text-red-600 font-semibold">
+									Delete Project
+								</h2>
+								<button
+									onClick={() => setIsDeleteModalOpen(false)}
+									className="p-1 text-outline hover:text-primary transition-colors cursor-pointer"
+								>
+									<X size={20} />
+								</button>
+							</div>
+
+							<div className="mb-6">
+								<p className="text-sm text-on-surface-variant leading-relaxed">
+									Are you sure you want to delete <strong className="text-primary">{deletingProject?.name}</strong>?
+									This action is permanent and will delete all associated versions/generations.
+								</p>
+							</div>
+
+							{/* Actions */}
+							<div className="flex gap-3">
+								<button
+									type="button"
+									onClick={() => setIsDeleteModalOpen(false)}
+									className="flex-1 px-5 py-3 border border-outline-variant text-on-surface-variant rounded-xl text-sm font-medium hover:bg-[#f5f3f3] transition-all cursor-pointer"
+								>
+									Cancel
+								</button>
+								<button
+									type="button"
+									onClick={handleDeleteProject}
+									disabled={deleteProjectMutation.isPending}
+									className={`flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-red-600 text-white rounded-xl text-sm font-medium transition-all hover:bg-red-700 hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
+										deleteProjectMutation.isPending ? "opacity-60 cursor-not-allowed hover:scale-100" : ""
+									}`}
+								>
+									{deleteProjectMutation.isPending ? (
+										<>
+											<Loader2 size={16} className="animate-spin" />
+											<span>Deleting...</span>
+										</>
+									) : (
+										<span>Delete Project</span>
+									)}
+								</button>
+							</div>
+						</motion.div>
+					</div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }
@@ -388,11 +631,27 @@ export function ProjectsPage() {
 function ProjectCard({
 	project,
 	onOpen,
+	onEdit,
+	onDelete,
 }: {
 	project: Project;
 	onOpen: (id: string) => void;
+	onEdit: (project: Project) => void;
+	onDelete: (project: Project) => void;
 }) {
 	const [menuOpen, setMenuOpen] = useState(false);
+	const menuRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!menuOpen) return;
+		const handleClickOutside = (e: MouseEvent) => {
+			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+				setMenuOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, [menuOpen]);
 
 	return (
 		<motion.div
@@ -426,15 +685,49 @@ function ProjectCard({
 					<h3 className="text-base font-bold text-primary truncate pr-2">
 						{project.name}
 					</h3>
-					<button
-						onClick={(e) => {
-							e.stopPropagation();
-							setMenuOpen(!menuOpen);
-						}}
-						className="p-0.5 text-outline hover:text-primary transition-colors flex-shrink-0 cursor-pointer"
-					>
-						<MoreVertical size={16} />
-					</button>
+					<div className="relative" ref={menuRef}>
+						<button
+							onClick={(e) => {
+								e.stopPropagation();
+								setMenuOpen(!menuOpen);
+							}}
+							className="p-1 text-outline hover:text-primary transition-colors flex-shrink-0 cursor-pointer rounded-lg hover:bg-[#efeded]/60"
+						>
+							<MoreVertical size={16} />
+						</button>
+						<AnimatePresence>
+							{menuOpen && (
+								<motion.div
+									initial={{ opacity: 0, scale: 0.95, y: -5 }}
+									animate={{ opacity: 1, scale: 1, y: 0 }}
+									exit={{ opacity: 0, scale: 0.95, y: -5 }}
+									transition={{ duration: 0.15 }}
+									className="absolute right-0 mt-1 w-36 bg-white border border-[#efeded] rounded-xl shadow-lg py-1.5 z-[60] text-left"
+								>
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											setMenuOpen(false);
+											onEdit(project);
+										}}
+										className="w-full px-4 py-2 text-xs font-semibold text-[#1b1c1c] hover:bg-[#faf8f7] transition-colors flex items-center gap-2 cursor-pointer text-left"
+									>
+										Edit details
+									</button>
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											setMenuOpen(false);
+											onDelete(project);
+										}}
+										className="w-full px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2 cursor-pointer text-left"
+									>
+										Delete project
+									</button>
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</div>
 				</div>
 
 				<p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 mb-4">
@@ -448,3 +741,4 @@ function ProjectCard({
 		</motion.div>
 	);
 }
+

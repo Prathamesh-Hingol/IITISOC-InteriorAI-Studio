@@ -120,6 +120,65 @@ export async function getProjectGenerations(req: Request, res: Response, next: N
   }
 }
 
+// Input validation schema for updating project
+export const updateProjectSchema = z.object({
+  name: z.string().min(1, "Project name is required").optional(),
+  description: z.string().optional(),
+});
+
+export async function updateProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { projectId } = req.params;
+    const userId = req.currentUser!.id;
+    const { name, description } = updateProjectSchema.parse(req.body);
+
+    // Verify ownership
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, userId },
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        name: name !== undefined ? name : project.name,
+        description: description !== undefined ? description : project.description,
+      },
+    });
+
+    res.json(updatedProject);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { projectId } = req.params;
+    const userId = req.currentUser!.id;
+
+    // Verify ownership
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, userId },
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    await prisma.project.delete({
+      where: { id: projectId },
+    });
+
+    res.json({ message: "Project deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // Helper: Format Dates to human readable strings
 function formatTime(date: Date): string {
   const now = new Date();
@@ -137,3 +196,4 @@ function formatTime(date: Date): string {
     day: "numeric",
   });
 }
+

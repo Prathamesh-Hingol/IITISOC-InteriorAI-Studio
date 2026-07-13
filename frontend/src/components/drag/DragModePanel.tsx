@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Move, Loader2, AlertCircle, Maximize2, X } from "lucide-react";
+import { Move, AlertCircle, Maximize2, X } from "lucide-react";
 import { useDragObject } from "../../hooks/useDragObject";
 import { DraggableObjectCanvas } from "./DraggableObjectCanvas";
 import type { VersionNode } from "../../types";
