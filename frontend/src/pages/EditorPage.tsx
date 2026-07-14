@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
-import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, Move, X } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { ImageCanvas } from "../components/editor/ImageCanvas";
 import { EditorSidebar } from "../components/editor/EditorSidebar";
@@ -9,7 +10,8 @@ import { MaskCandidatePanel } from "../components/editor/MaskCandidatePanel";
 import { useSelection } from "../hooks/useSelection";
 import { useEditor } from "../hooks/useEditor";
 import { EditorService } from "../services/editor.service";
-import type { EditorMode } from "../types/editor";
+import { DraggableObjectCanvas } from "../components/drag/DraggableObjectCanvas";
+import type { EditorMode, SegmentExtractResponse } from "../types/editor";
 
 interface LocationState {
   version?: {
@@ -92,11 +94,36 @@ export function EditorPage() {
     }
   }, [state]);
 
-  // Segmentation hook — only active for furniture-placement (pass empty string in modify mode to keep hook unconditional but idle)
-  const selection = useSelection(mode === "furniture-placement" ? (versionId || "") : "", getToken);
+  const isSegmentationMode = mode === "furniture-placement" || mode === "object-move";
+
+  // Segmentation hook — active for furniture-placement and object-move
+  const selection = useSelection(isSegmentationMode ? (versionId || "") : "", getToken);
 
   // Editor prompt & generation action hook
   const editor = useEditor(versionId || "", projectId, mode, getToken);
+
+  const [dragResult, setDragResult] = useState<SegmentExtractResponse | null>(null);
+  const [isExtractingMove, setIsExtractingMove] = useState(false);
+
+  const handleMove = async () => {
+    if (isExtractingMove || !versionId) return;
+    setIsExtractingMove(true);
+    try {
+      const res = await EditorService.segmentExtract({ versionId }, getToken);
+      setDragResult(res);
+      
+      // Clear the SAM session and reset frontend selection states after extraction is successful
+      try {
+        await selection.handleClearSelection();
+      } catch (clearErr) {
+        console.warn("[Move] Failed to clear SAM session after extract:", clearErr);
+      }
+    } catch (err) {
+      console.error("Failed to extract object for dragging:", err);
+    } finally {
+      setIsExtractingMove(false);
+    }
+  };
 
   const handleBack = () => {
     if (projectId) {
@@ -169,14 +196,18 @@ export function EditorPage() {
         </span>
         <div className="flex-1" />
         <span className="text-[10px] font-bold text-primary/70 bg-primary/5 px-2 py-0.5 rounded border border-primary/10 uppercase tracking-wider">
-          {mode === "furniture-placement" ? "Furniture Placement" : "Interior Modification"}
+          {mode === "furniture-placement"
+            ? "Furniture Placement"
+            : mode === "object-move"
+              ? "Object Lift & Move"
+              : "Interior Modification"}
         </span>
       </div>
 
       {/* Main workspace: [Candidates Panel?] + Canvas + Sidebar */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Candidate panel — only in furniture-placement mode */}
-        {mode === "furniture-placement" && (
+        {/* Candidate panel — only in segmentation modes */}
+        {isSegmentationMode && (
           <MaskCandidatePanel
             candidates={selection.candidateMasks}
             onSelect={selection.handleAcceptCandidate}
@@ -188,14 +219,14 @@ export function EditorPage() {
         {/* Canvas workspace */}
         <ImageCanvas
           imageUrl={imageUrl}
-          overlayUrl={mode === "furniture-placement" ? selection.combinedMask : null}
+          overlayUrl={isSegmentationMode ? selection.combinedMask : null}
           hoveredOverlayUrl={
-            mode === "furniture-placement" && hoveredCandidateIndex !== null
+            isSegmentationMode && hoveredCandidateIndex !== null
               ? (selection.candidateMasks[hoveredCandidateIndex]?.overlay_url ?? null)
               : null
           }
-          isSegmenting={mode === "furniture-placement" ? selection.isSegmenting : false}
-          onSelectPoint={mode === "furniture-placement" ? selection.handleSelectPoint : undefined}
+          isSegmenting={isSegmentationMode ? selection.isSegmenting : false}
+          onSelectPoint={isSegmentationMode ? selection.handleSelectPoint : undefined}
         />
 
         {/* Right parameters and upload sidebar */}
@@ -204,7 +235,7 @@ export function EditorPage() {
           onPromptChange={editor.setPrompt}
           selectionCount={selection.selectionCount}
           isSegmenting={selection.isSegmenting}
-          isGenerating={editor.isGenerating}
+          isGenerating={editor.isGenerating || isExtractingMove}
           clickLabels={selection.clickLabels}
           selectedClickIndices={selection.selectedClickIndices}
           onToggleClickIndex={selection.toggleClickIndex}
@@ -212,12 +243,52 @@ export function EditorPage() {
           onClearSelection={selection.handleClearSelection}
           onGenerate={() => editor.handleGenerate(selection.combinedMask || "")}
           onModify={editor.handleModify}
+          onMove={handleMove}
           mode={mode}
           referenceUrl={editor.furnitureReferenceUrl}
           isUploadingReference={editor.isUploadingReference}
           onReferenceUpload={editor.handleReferenceUpload}
         />
       </div>
+
+      {dragResult && createPortal(
+        <div className="fixed inset-0 z-[100] flex flex-col bg-[#070d0c] select-none">
+          {/* Top Bar */}
+          <div className="flex items-center justify-between px-6 py-4 bg-[#0b1512]/95 border-b border-white/10 backdrop-blur-md flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-primary/20 rounded-xl flex items-center justify-center border border-primary/30">
+                <Move size={16} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white leading-none">Object Lift &amp; Drag Workspace</h2>
+                <p className="text-[10px] text-white/50 mt-0.5">Drag the object to visualise placement · Press Escape or X to close</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="p-2 hover:bg-white/10 text-white/60 hover:text-white rounded-lg transition-all cursor-pointer"
+              title="Close (Esc)"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Canvas fills remaining space */}
+          <div className="flex-1 flex flex-col items-center justify-center min-h-0 p-6">
+            <DraggableObjectCanvas
+              backgroundUrl={dragResult.backgroundUrl}
+              cutoutUrl={dragResult.cutoutUrl}
+              depthUrl={dragResult.depthUrl}
+              meta={dragResult.meta}
+              autoScaleEnabled={true}
+              onReset={() => setDragResult(null)}
+              isFullscreen={true}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

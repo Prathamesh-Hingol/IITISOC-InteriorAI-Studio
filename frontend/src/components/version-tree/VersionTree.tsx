@@ -1,4 +1,4 @@
-import { Eye, Trash2, ImagePlus } from "lucide-react";
+import { Download, Eye, Trash2, ImagePlus } from "lucide-react";
 import type { VersionNode, VersionEdge } from "../../types";
 
 interface VersionTreeProps {
@@ -20,6 +20,27 @@ export function VersionTree({
 }: VersionTreeProps) {
 	const cardWidth = 200;
 	const cardHeight = 135;
+
+	const handleDownload = async (imageUrl: string, title: string) => {
+		try {
+			const response = await fetch(imageUrl);
+			if (!response.ok) {
+				throw new Error("Unable to download image");
+			}
+
+			const imageBlob = await response.blob();
+			const downloadUrl = URL.createObjectURL(imageBlob);
+			const link = document.createElement("a");
+			link.href = downloadUrl;
+			link.download = `${title.replace(/[^a-z0-9]/gi, "-").toLowerCase() || "generation"}.jpg`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(downloadUrl);
+		} catch {
+			window.open(imageUrl, "_blank", "noopener,noreferrer");
+		}
+	};
 
 	return (
 		<div className="absolute inset-0 pointer-events-none">
@@ -180,6 +201,19 @@ export function VersionTree({
 
 								{/* Hover overlay with action buttons */}
 								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-3 transition-all duration-200">
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											if (node.image) {
+												void handleDownload(node.image, node.title);
+											}
+										}}
+										disabled={!node.image}
+										className="p-2.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
+										title="Download image"
+									>
+										<Download size={14} />
+									</button>
 									<button
 										onClick={(e) => {
 											e.stopPropagation();

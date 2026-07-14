@@ -7,6 +7,7 @@ import {
   Circle,
   Armchair,
   X,
+  Move,
 } from "lucide-react";
 import { FurnitureReferenceUpload } from "./FurnitureReferenceUpload";
 import type { EditorMode } from "../../types/editor";
@@ -14,7 +15,7 @@ import type { EditorMode } from "../../types/editor";
 interface EditorSidebarProps {
   prompt: string;
   onPromptChange: (value: string) => void;
-  // --- Segmentation props (furniture-placement mode only) ---
+  // --- Segmentation props (furniture-placement and object-move modes) ---
   selectionCount: number;
   isSegmenting: boolean;
   isGenerating: boolean;
@@ -26,6 +27,7 @@ interface EditorSidebarProps {
   // --- Generation callbacks ---
   onGenerate: () => void;       // furniture-placement: requires mask
   onModify: () => void;         // interior-modification: prompt-only
+  onMove?: () => void;          // object-move: requires mask
   mode: EditorMode;
   // Furniture Reference Uploads (only for furniture-placement)
   referenceUrl: string | null;
@@ -51,12 +53,15 @@ export function EditorSidebar({
   onClearSelection,
   onGenerate,
   onModify,
+  onMove,
   mode,
   referenceUrl,
   isUploadingReference,
   onReferenceUpload,
 }: EditorSidebarProps) {
   const isFurnitureMode = mode === "furniture-placement";
+  const isMoveMode = mode === "object-move";
+  const isSegmentationMode = isFurnitureMode || isMoveMode;
 
   // Furniture mode gate
   const hasSelection = selectionCount > 0;
@@ -68,6 +73,9 @@ export function EditorSidebar({
   // Interior-modification mode gate (prompt-only)
   const canModify = hasPrompt && !isGenerating;
 
+  // Move mode gate
+  const canMove = hasSelection && !isGenerating && !isSegmenting;
+
   return (
     <div className="w-[320px] h-full bg-white border-l border-[#efeded] flex flex-col justify-between overflow-y-auto select-none">
       <div className="flex-1 flex flex-col gap-5 p-5">
@@ -77,23 +85,27 @@ export function EditorSidebar({
             <div className="w-7 h-7 bg-primary/5 rounded-lg flex items-center justify-center border border-primary/10">
               {isFurnitureMode ? (
                 <Armchair size={14} className="text-primary" />
+              ) : isMoveMode ? (
+                <Move size={14} className="text-primary" />
               ) : (
                 <Paintbrush size={14} className="text-primary" />
               )}
             </div>
             <h2 className="text-sm font-bold text-[#1b1c1c]">
-              {isFurnitureMode ? "Furniture Placement" : "Interior Modification"}
+              {isFurnitureMode ? "Furniture Placement" : isMoveMode ? "Object Lift & Move" : "Interior Modification"}
             </h2>
           </div>
           <p className="text-[11px] text-[#707976] leading-relaxed mt-1">
             {isFurnitureMode
               ? "Click on the room region to place furniture. Upload an optional style reference image."
-              : "Describe the interior changes you want applied to this room."}
+              : isMoveMode
+                ? "Click on the object to highlight it for moving."
+                : "Describe the interior changes you want applied to this room."}
           </p>
         </div>
 
         {/* ─── INTERIOR MODIFICATION: Prompt-Only UI ─────────── */}
-        {!isFurnitureMode && (
+        {mode === "interior-modification" && (
           <div className="flex flex-col gap-4">
             {/* Prompt */}
             <div className="flex flex-col gap-2">
@@ -122,8 +134,8 @@ export function EditorSidebar({
           </div>
         )}
 
-        {/* ─── FURNITURE PLACEMENT: Full Segmentation UI ──────── */}
-        {isFurnitureMode && (
+        {/* ─── SEGMENTATION/MOVE MODES: Full Segmentation UI ──────── */}
+        {isSegmentationMode && (
           <>
             {/* Selection Status */}
             <div className="flex flex-col gap-2">
@@ -232,28 +244,32 @@ export function EditorSidebar({
               </div>
             </div>
 
-            <hr className="border-[#efeded]" />
+            {isFurnitureMode && (
+              <>
+                <hr className="border-[#efeded]" />
 
-            {/* Prompt */}
-            <div className="flex flex-col gap-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-[#707976]">
-                Design Instructions
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => onPromptChange(e.target.value)}
-                placeholder="e.g., Add a luxury brown leather lounge chair with matching ottoman"
-                rows={4}
-                className="w-full text-xs text-[#1b1c1c] placeholder:text-[#c0c8c5] resize-none rounded-xl p-3 border border-[#efeded] focus:outline-none focus:border-primary/20 bg-[#faf8f7] focus:bg-white leading-relaxed transition-all"
-              />
-            </div>
+                {/* Prompt */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[#707976]">
+                    Design Instructions
+                  </label>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => onPromptChange(e.target.value)}
+                    placeholder="e.g., Add a luxury brown leather lounge chair with matching ottoman"
+                    rows={4}
+                    className="w-full text-xs text-[#1b1c1c] placeholder:text-[#c0c8c5] resize-none rounded-xl p-3 border border-[#efeded] focus:outline-none focus:border-primary/20 bg-[#faf8f7] focus:bg-white leading-relaxed transition-all"
+                  />
+                </div>
 
-            {/* Furniture Reference (Optional) */}
-            <FurnitureReferenceUpload
-              referenceUrl={referenceUrl}
-              isUploading={isUploadingReference}
-              onUpload={onReferenceUpload}
-            />
+                {/* Furniture Reference (Optional) */}
+                <FurnitureReferenceUpload
+                  referenceUrl={referenceUrl}
+                  isUploading={isUploadingReference}
+                  onUpload={onReferenceUpload}
+                />
+              </>
+            )}
           </>
         )}
       </div>
@@ -292,6 +308,36 @@ export function EditorSidebar({
             {hasSelection && !hasPrompt && (
               <p className="text-[10px] text-amber-500 text-center mt-2 animate-pulse">
                 Enter design instructions to enable generation
+              </p>
+            )}
+          </>
+        ) : isMoveMode ? (
+          <>
+            <button
+              type="button"
+              onClick={onMove}
+              disabled={!canMove}
+              className={`w-full h-12 flex items-center justify-center gap-2 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer shadow-md ${
+                canMove
+                  ? "bg-[#00362d] hover:bg-[#1a4d43] text-white hover:scale-[1.02] active:scale-[0.98]"
+                  : "bg-[#efeded] text-[#c0c8c5] cursor-not-allowed shadow-none"
+              }`}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Extracting Object...</span>
+                </>
+              ) : (
+                <>
+                  <Move size={16} />
+                  <span>Move Object</span>
+                </>
+              )}
+            </button>
+            {!hasSelection && (
+              <p className="text-[10px] text-[#c0c8c5] text-center mt-2">
+                Highlight at least one region to begin
               </p>
             )}
           </>

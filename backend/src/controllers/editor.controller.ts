@@ -44,6 +44,10 @@ const generateRequestSchema = z.object({
 	mode: z.enum(["interior-modification", "furniture-placement"]),
 });
 
+const segmentExtractRequestSchema = z.object({
+	versionId: z.string().uuid("Invalid version ID"),
+});
+
 // ─── Types ───────────────────────────────────────────────────
 interface candidateRes {
 	candidate_index:number,
@@ -72,6 +76,21 @@ interface SAMRemoveClicksResponse {
 
 interface GenerationResponse {
 	output_url:string
+}
+
+// Response returned by the SAM microservice /segment/extract route.
+// Mirrors the same shape as the DRAG_ENDPOINT /extract response so the
+// DraggableObjectCanvas can consume both interchangeably.
+interface SAMExtractResponse {
+	clean_bg_url: string;
+	cutout_url: string;
+	depth_preview_url: string;
+	placement_meta: {
+		bbox: { x0: number; y0: number; x1: number; y1: number };
+		centroid: { x: number; y: number };
+		cutout_size: { width: number; height: number };
+		background_size: { width: number; height: number };
+	};
 }
 
 // ─── In-Memory Mock Session Store ────────────────────────────
@@ -492,6 +511,7 @@ export async function generate(
 							mask_url: validated.combinedMask,
 							reference_image_url: validated.furnitureReference || null,
 							edit_mode: validated.mode,
+							guidance:8,
 						},
 						{
 							headers: { "Content-Type": "application/json" },
@@ -529,6 +549,106 @@ export async function generate(
 				imageUrl: dbGen.imageUrl,
 				status: dbGen.status,
 			},
+		});
+	} catch (error) {
+		if (error instanceof z.ZodError) {
+			return res
+				.status(400)
+				.json({ error: "Validation failed", details: error.errors });
+		}
+		next(error);
+	}
+}
+
+/**
+ * POST /api/editor/segment/extract
+ * Extracts the selected/segmented mask in the move mode session.
+ * Forwards to the SAM microservice's segment/extract endpoint.
+ * Returns backgroundUrl, cutoutUrl, depthUrl, and placement metadata.
+ */
+export async function segmentExtract(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const validated = segmentExtractRequestSchema.parse(req.body);
+		const userId = req.currentUser?.id;
+
+		if (!userId) {
+			return res.status(401).json({ error: "Unauthorized" });
+		}
+
+		// Verify version and project ownership
+		const generation = await prisma.generation.findUnique({
+			where: { id: validated.versionId },
+			include: { project: true },
+		});
+
+		if (!generation || generation.project.userId !== userId) {
+			return res
+				.status(404)
+				.json({ error: "Version not found or unauthorized" });
+		}
+
+		const samEndpoint = process.env.SAM_ENDPOINT;
+
+		if (samEndpoint) {
+			try {
+				console.log(
+					`[SAM-Extract] Forwarding session ${validated.versionId} to SAM microservice for extraction`,
+				);
+
+				const samResponse: AxiosResponse<SAMExtractResponse> =
+					await axios.post<SAMExtractResponse>(
+						`${samEndpoint}/segment/extract`,
+						{
+							session_id: validated.versionId,
+							image_url: generation.imageUrl,
+						},
+						{
+							headers: { "Content-Type": "application/json" },
+						},
+					);
+
+				const { clean_bg_url, cutout_url, depth_preview_url, placement_meta }: SAMExtractResponse =
+					samResponse.data;
+					console.log(clean_bg_url);
+				return res.json({
+					backgroundUrl: clean_bg_url,
+					cutoutUrl: cutout_url,
+					depthUrl: depth_preview_url,
+					meta: placement_meta,
+				});
+			} catch (samError: any) {
+				console.error(
+					"[SAM-Extract] SAM service failed, falling back to mock:",
+					samError.message,
+				);
+				// Fall through to mock below
+			}
+		}
+
+		// Mock Fallback
+		console.warn("[SAM-Extract] Using mock fallback — set SAM_ENDPOINT in .env for real extraction.");
+		// Use 512, 512 as center point for the mock cutout
+		const mock = {
+			clean_bg_url: generation.imageUrl,
+			cutout_url: generation.imageUrl,
+			depth_preview_url: generation.imageUrl,
+			placement_meta: {
+				bbox: { x0: 448, y0: 448, x1: 576, y1: 576 },
+				centroid: { x: 512, y: 512 },
+				cutout_size: { width: 128, height: 128 },
+				background_size: { width: 1024, height: 1024 },
+			},
+		};
+
+		return res.json({
+			backgroundUrl: mock.clean_bg_url,
+			cutoutUrl: mock.cutout_url,
+			depthUrl: mock.depth_preview_url,
+			meta: mock.placement_meta,
 		});
 	} catch (error) {
 		if (error instanceof z.ZodError) {

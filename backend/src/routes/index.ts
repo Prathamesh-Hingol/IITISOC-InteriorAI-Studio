@@ -15,4 +15,13 @@ router.use("/generations", requireAuthAndSyncUser, generationRoutes);
 router.use("/editor", requireAuthAndSyncUser, editorRoutes);
 router.use("/drag", requireAuthAndSyncUser, dragRoutes);
 
+// Public health check route for monitoring and avoiding container sleep
+router.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 export default router;

@@ -5,6 +5,7 @@ import {
   removeClicks,
   clearSelection,
   generate,
+  segmentExtract,
 } from "../controllers/editor.controller";
 
 const router = Router();
@@ -23,6 +24,9 @@ router.post("/clear-selection", clearSelection);
 
 // POST /api/editor/generate — Generate final inpaint/furniture edit
 router.post("/generate", generate);
+
+// POST /api/editor/segment/extract — Extract segmented mask for object move
+router.post("/segment/extract", segmentExtract);
 
 export default router;
 

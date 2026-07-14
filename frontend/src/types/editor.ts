@@ -7,7 +7,23 @@ export interface Point {
   y: number;
 }
 
-export type EditorMode = "interior-modification" | "furniture-placement";
+export type EditorMode = "interior-modification" | "furniture-placement" | "object-move";
+
+export interface SegmentExtractRequest {
+  versionId: string;
+}
+
+export interface SegmentExtractResponse {
+  backgroundUrl: string;
+  cutoutUrl: string;
+  depthUrl: string;
+  meta: {
+    bbox: { x0: number; y0: number; x1: number; y1: number };
+    centroid: { x: number; y: number };
+    cutout_size: { width: number; height: number };
+    background_size: { width: number; height: number };
+  };
+}
 
 export interface SegmentRequest {
   versionId: string;

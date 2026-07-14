@@ -9,6 +9,8 @@ import type {
   RemoveClicksRequest,
   GenerateRequest,
   GenerateResponse,
+  SegmentExtractRequest,
+  SegmentExtractResponse,
 } from "../types/editor";
 
 export const editorApi = {
@@ -53,6 +55,15 @@ export const editorApi = {
     getToken: () => Promise<string | null>,
   ): Promise<GenerateResponse> =>
     fetchWithAuth<GenerateResponse>("/editor/generate", getToken, {
+      method: "POST",
+      body: payload,
+    }),
+
+  segmentExtract: (
+    payload: SegmentExtractRequest,
+    getToken: () => Promise<string | null>,
+  ): Promise<SegmentExtractResponse> =>
+    fetchWithAuth<SegmentExtractResponse>("/editor/segment/extract", getToken, {
       method: "POST",
       body: payload,
     }),

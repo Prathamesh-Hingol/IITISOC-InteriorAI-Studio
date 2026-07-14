@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Upload, Crop, Loader2, Paintbrush, Armchair, MousePointer2 } from "lucide-react";
-import { DragModePanel } from "../drag/DragModePanel";
 import type { VersionNode } from "../../types";
 
 interface InspectorPanelProps {
@@ -12,10 +11,9 @@ interface InspectorPanelProps {
     mode: "restyle" | "furnish-empty"
   ) => void;
   onUploadImage?: (file: File) => void;
-  onEditNode: (node: VersionNode, mode: "interior-modification" | "furniture-placement") => void;
+  onEditNode: (node: VersionNode, mode: "interior-modification" | "furniture-placement" | "object-move") => void;
   isUploading?: boolean;
   isGenerating?: boolean;
-  getToken?: () => Promise<string | null>;
 }
 
 type StudioActionTab = "interior-modification" | "furniture-placement" | "object-move";
@@ -27,7 +25,6 @@ export function InspectorPanel({
   onEditNode,
   isUploading = false,
   isGenerating,
-  getToken,
 }: InspectorPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -310,10 +307,40 @@ export function InspectorPanel({
         )}
 
         {activeTab === "object-move" && (
-          <DragModePanel
-            activeNode={activeNode}
-            getToken={getToken || (async () => null)}
-          />
+          <div className="flex flex-col gap-4 flex-1">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider text-[#707976]">
+                Object Move
+              </h3>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Reposition, slide, or adjust elements in the room. Highlight the object using interactive segmentation, then drag it freely.
+              </p>
+            </div>
+
+            <div className="bg-[#faf8f7] border border-[#efeded] rounded-2xl p-4 flex flex-col gap-3">
+              <div className="text-[11px] text-primary/80 font-bold flex items-center gap-1.5">
+                <MousePointer2 size={13} />
+                <span>Workspace highlights</span>
+              </div>
+              <ul className="text-[11px] text-on-surface-variant space-y-1.5 list-disc pl-4">
+                <li>Highlight target object to lift</li>
+                <li>Verify segmented mask outline</li>
+                <li>Drag and position the object in 3D-depth space</li>
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              disabled={!activeNode}
+              onClick={() => activeNode && onEditNode(activeNode, "object-move")}
+              className={`w-full flex items-center justify-center gap-2 h-11 text-xs font-bold text-white bg-primary hover:bg-primary-container rounded-xl shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                !activeNode ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+              }`}
+            >
+              <MousePointer2 size={14} />
+              <span>Open Move Workspace</span>
+            </button>
+          </div>
         )}
       </div>
     </aside>

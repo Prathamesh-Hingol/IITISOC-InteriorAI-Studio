@@ -10,6 +10,8 @@ import type {
   RemoveClicksRequest,
   GenerateRequest,
   GenerateResponse,
+  SegmentExtractRequest,
+  SegmentExtractResponse,
 } from "../types/editor";
 
 export const EditorService = {
@@ -53,5 +55,12 @@ export const EditorService = {
     getToken: () => Promise<string | null>,
   ) {
     return generationsApi.detail(versionId, getToken);
+  },
+
+  async segmentExtract(
+    payload: SegmentExtractRequest,
+    getToken: () => Promise<string | null>,
+  ): Promise<SegmentExtractResponse> {
+    return editorApi.segmentExtract(payload, getToken);
   },
 };
