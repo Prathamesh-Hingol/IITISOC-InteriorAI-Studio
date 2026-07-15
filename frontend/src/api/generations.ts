@@ -1,4 +1,5 @@
 import { fetchWithAuth } from "./client";
+import type { DepthAssets } from "../types";
 
 export interface CreateGenerationPayload {
   projectId: string;
@@ -23,5 +24,9 @@ export const generationsApi = {
   delete: (generationId: string, getToken: () => Promise<string | null>) =>
     fetchWithAuth(`/generations/${generationId}`, getToken, {
       method: "DELETE",
+    }),
+  depth: (generationId: string, getToken: () => Promise<string | null>) =>
+    fetchWithAuth<DepthAssets>(`/generations/${generationId}/depth`, getToken, {
+      method: "POST",
     }),
 };

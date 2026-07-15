@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/clerk-react";
 import { GenerationService } from "../services/generation.service";
 import type{ CreateGenerationPayload } from "../api/generations";
@@ -30,5 +30,16 @@ export function useDeleteGeneration(projectId: string) {
       queryClient.invalidateQueries({ queryKey: ["project-generations", projectId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
+  });
+}
+
+export function useGenerationDepth(generationId: string | undefined) {
+  const { getToken } = useAuth();
+
+  return useQuery({
+    queryKey: ["generation-depth", generationId],
+    queryFn: () => GenerationService.getDepthAssets(generationId!, getToken),
+    enabled: Boolean(generationId),
+    retry: 1,
   });
 }

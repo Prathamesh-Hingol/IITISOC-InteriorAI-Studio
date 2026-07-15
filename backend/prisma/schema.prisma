@@ -41,6 +41,8 @@ model Generation {
   creativityStrength Int?
   generationMode     String? // "restyle" | "furnish-empty"
   status             String // "pending" | "completed" | "failed"
+  depthPreviewUrl    String?
+  depthRaw16Url      String?
   x                  Float?
   y                  Float?
   createdAt          DateTime     @default(now())

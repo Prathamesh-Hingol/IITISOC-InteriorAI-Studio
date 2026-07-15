@@ -28,6 +28,13 @@ export interface CanvasState {
   isHandMode: boolean;
 }
 
+export interface DepthAssets {
+  imageUrl: string;
+  depthPreviewUrl: string;
+  depthRaw16Url: string;
+  cached: boolean;
+}
+
 export type StylePreset = "Modern" | "Minimalist" | "Luxury" | "Scandinavian" | "Industrial";
 
 export type GenerationMode = "restyle" | "furnish-empty" | "inpaint";

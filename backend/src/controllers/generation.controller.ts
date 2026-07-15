@@ -17,6 +17,11 @@ interface kontextRes {
 	"output_url":string,
 }
 
+interface DepthResponse {
+	depth_preview_url: string;
+	depth_raw16_url: string;
+}
+
 export const createGenerationSchema = z.object({
 	projectId: z.string().uuid("Invalid project ID"),
 	parentId: z.string().uuid("Invalid parent ID").nullable().optional(),
@@ -221,6 +226,71 @@ export async function getGenerationDetail(
 		}
 
 		res.json(generation);
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function createGenerationDepth(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { generationId } = req.params;
+		const userId = req.currentUser!.id;
+
+		const generation = await prisma.generation.findUnique({
+			where: { id: generationId },
+			include: { project: true },
+		});
+
+		if (!generation || generation.project.userId !== userId) {
+			return res.status(404).json({ error: "Generation not found" });
+		}
+
+		if (generation.depthPreviewUrl && generation.depthRaw16Url) {
+			return res.json({
+				imageUrl: generation.imageUrl,
+				depthPreviewUrl: generation.depthPreviewUrl,
+				depthRaw16Url: generation.depthRaw16Url,
+				cached: true,
+			});
+		}
+
+		const samEndpoint = process.env.SAM_ENDPOINT;
+		if (!samEndpoint) {
+			return res.status(503).json({ error: "3D depth service is not configured" });
+		}
+
+		const depthResponse = await axios.post<DepthResponse>(
+			`${samEndpoint}/depth`,
+			{ image_url: generation.imageUrl },
+			{
+				headers: { "Content-Type": "application/json" },
+				timeout: 120000,
+			},
+		);
+
+		const { depth_preview_url, depth_raw16_url } = depthResponse.data;
+		if (!depth_preview_url || !depth_raw16_url) {
+			return res.status(502).json({ error: "Depth service returned incomplete assets" });
+		}
+
+		const updatedGeneration = await prisma.generation.update({
+			where: { id: generation.id },
+			data: {
+				depthPreviewUrl: depth_preview_url,
+				depthRaw16Url: depth_raw16_url,
+			},
+		});
+
+		return res.json({
+			imageUrl: updatedGeneration.imageUrl,
+			depthPreviewUrl: updatedGeneration.depthPreviewUrl,
+			depthRaw16Url: updatedGeneration.depthRaw16Url,
+			cached: false,
+		});
 	} catch (error) {
 		next(error);
 	}

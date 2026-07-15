@@ -1,4 +1,4 @@
-import { Download, Eye, Trash2, ImagePlus } from "lucide-react";
+import { Box, Download, Eye, Trash2, ImagePlus } from "lucide-react";
 import type { VersionNode, VersionEdge } from "../../types";
 
 interface VersionTreeProps {
@@ -8,6 +8,7 @@ interface VersionTreeProps {
 	onSelectNode: (id: string) => void;
 	onDeleteNode?: (id: string) => void;
 	onPreviewNode?: (node: VersionNode) => void;
+	onView3D?: (node: VersionNode) => void;
 }
 
 export function VersionTree({
@@ -17,6 +18,7 @@ export function VersionTree({
 	onSelectNode,
 	onPreviewNode,
 	onDeleteNode,
+	onView3D,
 }: VersionTreeProps) {
 	const cardWidth = 200;
 	const cardHeight = 135;
@@ -201,6 +203,16 @@ export function VersionTree({
 
 								{/* Hover overlay with action buttons */}
 								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-3 transition-all duration-200">
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											onView3D?.(node);
+										}}
+										className="p-2.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+										title="View in 3D"
+									>
+										<Box size={14} />
+									</button>
 									<button
 										onClick={(e) => {
 											e.stopPropagation();

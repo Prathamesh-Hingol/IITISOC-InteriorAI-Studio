@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -5,6 +6,10 @@ import { LandingPage } from "./pages/LandingPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { StudioPage } from "./pages/StudioPage";
 import { EditorPage } from "./pages/EditorPage";
+
+const DepthViewerPage = lazy(() =>
+  import("./pages/DepthViewerPage").then((module) => ({ default: module.DepthViewerPage })),
+);
 
 // Initialize TanStack Query Client
 const queryClient = new QueryClient({
@@ -68,6 +73,22 @@ function App() {
                   </SignedIn>
                   <SignedOut>
                     <RedirectToSignIn signInForceRedirectUrl="/projects" />
+                  </SignedOut>
+                </>
+              }
+            />
+
+            <Route
+              path="/project/:projectId/generation/:generationId/3d"
+              element={
+                <>
+                  <SignedIn>
+                    <Suspense fallback={<div className="grid h-screen place-items-center bg-[#0b0b0d] text-sm text-white">Loading 3D viewer…</div>}>
+                      <DepthViewerPage />
+                    </Suspense>
+                  </SignedIn>
+                  <SignedOut>
+                    <RedirectToSignIn />
                   </SignedOut>
                 </>
               }

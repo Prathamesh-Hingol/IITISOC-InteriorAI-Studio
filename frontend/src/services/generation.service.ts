@@ -13,4 +13,8 @@ export const GenerationService = {
   async deleteGeneration(generationId: string, getToken: () => Promise<string | null>) {
     return generationsApi.delete(generationId, getToken);
   },
+
+  async getDepthAssets(generationId: string, getToken: () => Promise<string | null>) {
+    return generationsApi.depth(generationId, getToken);
+  },
 };

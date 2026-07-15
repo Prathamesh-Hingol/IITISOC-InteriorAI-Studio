@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye } from "lucide-react";
+import { Box, Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { LeftSidebar } from "../components/sidebar/LeftSidebar";
 import { Canvas } from "../components/workspace/Canvas";
@@ -203,6 +203,11 @@ export function StudioPage() {
 				},
 			},
 		});
+	};
+
+	const handleView3D = (node: VersionNode) => {
+		if (!projectId || node.type === "placeholder") return;
+		navigate(`/project/${projectId}/generation/${node.id}/3d`);
 	};
 
 	// Loading & Error States
@@ -424,6 +429,7 @@ export function StudioPage() {
 								onSelectNode={selectNode}
 								onDeleteNode={handleDeleteNode}
 								onPreviewNode={setPreviewNode}
+								onView3D={handleView3D}
 							/>
 						</Canvas>
 
@@ -599,7 +605,14 @@ export function StudioPage() {
 									</div>
 
 									{/* Bottom Action */}
-									<div className="mt-8 pt-4 border-t border-[#efeded]/65">
+									<div className="mt-8 pt-4 border-t border-[#efeded]/65 space-y-2">
+										<button
+											onClick={() => handleView3D(previewNode)}
+											className="w-full h-11 border border-primary/20 hover:border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+										>
+											<Box size={15} />
+											<span>Open 3D View</span>
+										</button>
 										<button
 											onClick={() => setPreviewNode(null)}
 											className="w-full h-11 bg-primary hover:bg-primary-container text-white text-xs font-bold rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
