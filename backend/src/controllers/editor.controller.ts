@@ -5,6 +5,7 @@ import { z } from "zod";
 import axios from "axios";
 import type { AxiosResponse } from "axios";
 import dotenv from "dotenv";
+import { enqueueGeneration } from "../queues/ai-generation.queue";
 
 dotenv.config();
 
@@ -476,7 +477,7 @@ export async function generate(
 		const title = `V${nextIndex}: ${validated.mode === "furniture-placement" ? "Furniture" : "Interior"} Edit`;
 
 		// Create a pending generation in DB
-		let dbGen = await prisma.generation.create({
+		const dbGen = await prisma.generation.create({
 			data: {
 				title,
 				projectId: parentNode.projectId,
@@ -489,58 +490,27 @@ export async function generate(
 					validated.mode === "furniture-placement"
 						? "furnish-empty"
 						: "restyle",
-				status: "pending",
+				status: "queued",
+				jobType: "editor",
+				jobPayload: {
+					prompt: validated.prompt, session_id: parentNode.id, image_url: parentNode.imageUrl,
+					mask_url: validated.combinedMask, reference_image_url: validated.furnitureReference || null,
+					edit_mode: validated.mode, guidance: 8,
+				},
+				queuedAt: new Date(),
 			},
 		});
 
-		let generatedImageUrl = parentNode.imageUrl;
-		const samEndpoint = process.env.SAM_ENDPOINT;
-
-		if (samEndpoint) {
-			try {
-				console.log(
-					`[Generation] Triggering microservice for ${validated.mode}`,
-				);
-				const response: AxiosResponse<GenerationResponse> =
-					await axios.post<GenerationResponse>(
-						`${samEndpoint}/generate`,
-						{
-							prompt: validated.prompt,
-							session_id:parentNode.id,
-							image_url: parentNode.imageUrl,
-							mask_url: validated.combinedMask,
-							reference_image_url: validated.furnitureReference || null,
-							edit_mode: validated.mode,
-							guidance:8,
-						},
-						{
-							headers: { "Content-Type": "application/json" },
-						},
-					);
-
-				if (response.data?.output_url) {
-					generatedImageUrl = response.data.output_url;
-				}
-			} catch (genError: any) {
-				console.error(
-					"Generation microservice failed, falling back to mock details:",
-					genError.message,
-				);
-				// Fallback to parent image or random mock visual to make sure flow doesn't crash
-				generatedImageUrl = parentNode.imageUrl;
-			}
+		try {
+			await enqueueGeneration(dbGen.id);
+		} catch (queueError) {
+			await prisma.generation.update({ where: { id: dbGen.id }, data: {
+				status: "failed", failedAt: new Date(), failureMessage: "Unable to queue generation",
+			}});
+			throw queueError;
 		}
 
-		// Update version status to completed
-		dbGen = await prisma.generation.update({
-			where: { id: dbGen.id },
-			data: {
-				status: "completed",
-				imageUrl: generatedImageUrl,
-			},
-		});
-
-		return res.status(201).json({
+		return res.status(202).json({
 			generation: {
 				id: dbGen.id,
 				title: dbGen.title,

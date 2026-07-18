@@ -41,10 +41,22 @@ model Generation {
   creativityStrength Int?
   generationMode     String? // "restyle" | "furnish-empty"
   status             String // "pending" | "completed" | "failed"
+  jobType            String?
+  jobPayload         Json?
+  queuedAt           DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  failedAt           DateTime?
+  failureMessage     String?
+  attempts           Int          @default(0)
   depthPreviewUrl    String?
   depthRaw16Url      String?
   x                  Float?
   y                  Float?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([projectId, createdAt])
+  @@index([parentId])
 }
