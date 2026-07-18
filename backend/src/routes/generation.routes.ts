@@ -5,12 +5,16 @@ import {
   getGenerationDetail,
   deleteGeneration,
 } from "../controllers/generation.controller";
+import {
+  aiProcessingLimiter,
+  generationLimiter,
+} from "../middleware/rate-limit";
 
 const router = Router();
 
-router.post("/", createGeneration);
+router.post("/", generationLimiter, createGeneration);
 router.get("/:generationId", getGenerationDetail);
-router.post("/:generationId/depth", createGenerationDepth);
+router.post("/:generationId/depth", aiProcessingLimiter, createGenerationDepth);
 router.delete("/:generationId", deleteGeneration);
 
 export default router;

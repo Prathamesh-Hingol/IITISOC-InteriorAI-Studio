@@ -5,6 +5,8 @@ import generationRoutes from "./generation.routes";
 import editorRoutes from "./editor.routes";
 import dragRoutes from "./drag.routes";
 import { requireAuthAndSyncUser } from "../middleware/auth";
+import { prisma } from "../config/db";
+import { redis } from "../config/redis";
 
 const router = Router();
 
@@ -22,6 +24,17 @@ router.get("/health", (_req, res) => {
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Readiness verifies dependencies required to serve authenticated API traffic.
+router.get("/ready", async (_req, res) => {
+  try {
+    await Promise.all([prisma.$queryRaw`SELECT 1`, redis.ping()]);
+    res.json({ status: "ready" });
+  } catch (error) {
+    console.error("Readiness check failed:", error);
+    res.status(503).json({ status: "not ready" });
+  }
 });
 
 export default router;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { uploadImage } from "../controllers/upload.controller";
+import { uploadLimiter } from "../middleware/rate-limit";
 
 const router = Router();
 
@@ -19,6 +20,7 @@ const upload = multer({
   },
 });
 
-router.post("/", upload.single("image"), uploadImage);
+// Limit before multer reads the request into memory.
+router.post("/", uploadLimiter, upload.single("image"), uploadImage);
 
 export default router;
