@@ -129,3 +129,61 @@ The frontend has been refactored into a **4-Layer Architecture**:
    npm run dev
    ```
    The client will open on [http://localhost:5173](http://localhost:5173).
+
+---
+
+## 5. Containerized Backend with Nginx
+
+The production backend stack lives in `backend/docker-compose.yml`. Nginx is the
+only service exposed to the host (port 80); it load-balances `/api/` and
+`/health` requests across the internal backend containers. Redis is internal to
+the Compose network, and PostgreSQL remains an externally managed service.
+
+1. Create the deployment environment file:
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+   Set `DATABASE_URL`, Clerk, and Cloudinary credentials. Set `FRONTEND_URL` to
+   the browser origin served in your deployment.
+2. Build and run three API instances:
+   ```bash
+   docker compose -f backend/docker-compose.yml up --build --scale backend=3 -d
+   ```
+   The one-off `migrate` service applies Prisma migrations before the API
+   replicas start.
+3. Confirm the public health endpoint:
+   ```bash
+   curl http://localhost/health
+   ```
+
+To change capacity, rerun the same command with a different `--scale
+backend=N` value. Docker DNS and Nginx's dynamic upstream resolver refresh the
+set of backend container addresses without publishing a backend port.
+
+### Load testing with k6
+
+Start the Docker stack first, then run the health-route test through Nginx. It
+defaults to 10 virtual users for 30 seconds and asserts fewer than 1% failed
+requests with a 95th-percentile latency below 500 ms.
+
+```bash
+k6 run backend/load-tests/health.js
+```
+
+If k6 is not installed locally, run it in Docker instead:
+
+```bash
+docker run --rm --network backend_default -e BASE_URL=http://nginx -v "$PWD/backend/load-tests:/scripts:ro" grafana/k6 run /scripts/health.js
+```
+
+Increase load only after a smoke test succeeds:
+
+```bash
+k6 run -e VUS=50 -e DURATION=2m backend/load-tests/health.js
+```
+
+Set `BASE_URL` to load test a deployed environment, for example
+`-e BASE_URL=https://api.example.com`. The default endpoint is `/api/health`,
+which is safe from the API rate limiter. To measure database and Redis
+readiness as well, use `-e ENDPOINT=/api/ready`; this intentionally adds a
+database query and Redis ping to every request.
