@@ -17,6 +17,6 @@ export const aiGenerationQueue = new Queue<AiGenerationJobData>(AI_GENERATION_QU
 
 export async function enqueueGeneration(generationId: string): Promise<void> {
   await aiGenerationQueue.add("generate", { generationId }, {
-    jobId: `generation:${generationId}`,
+    jobId: `generation-${generationId}`,
   });
 }

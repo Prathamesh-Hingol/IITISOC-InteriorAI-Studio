@@ -5,14 +5,14 @@
 Start Redis from the backend directory:
 
 ```bash
-docker compose -f docker-compose.redis.yml up -d
+docker compose up -d redis
 ```
 
 The backend defaults to `redis://127.0.0.1:6379` outside production, so no
 local environment variable is required. Stop the service with:
 
 ```bash
-docker compose -f docker-compose.redis.yml down
+docker compose stop redis
 ```
 
 ## Managed Redis

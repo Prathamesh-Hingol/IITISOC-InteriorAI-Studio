@@ -132,38 +132,33 @@ The frontend has been refactored into a **4-Layer Architecture**:
 
 ---
 
-## 5. Containerized Backend with Nginx
+## 5. Run the backend with Docker
 
-The production backend stack lives in `backend/docker-compose.yml`. Nginx is the
-only service exposed to the host (port 80); it load-balances `/api/` and
-`/health` requests across the internal backend containers. Redis is internal to
-the Compose network, and PostgreSQL remains an externally managed service.
+Docker starts PostgreSQL, Redis, database migrations, and the API. You only
+need Docker Desktop and your Clerk and Cloudinary credentials.
 
-1. Create the deployment environment file:
+1. Create the backend environment file:
    ```bash
    cp backend/.env.example backend/.env
    ```
-   Set `DATABASE_URL`, Clerk, and Cloudinary credentials. Set `FRONTEND_URL` to
-   the browser origin served in your deployment.
-2. Build and run three API instances:
+   Fill in the Clerk and Cloudinary values. The supplied database settings work
+   for local Docker use; change `POSTGRES_PASSWORD` before deployment.
+2. Start the stack:
    ```bash
-   docker compose -f backend/docker-compose.yml up --build --scale backend=3 -d
+   cd backend
+   docker compose up --build
    ```
-   The one-off `migrate` service applies Prisma migrations before the API
-   replicas start.
-3. Confirm the public health endpoint:
-   ```bash
-   curl http://localhost/health
-   ```
+3. Open [http://localhost:5000/health](http://localhost:5000/health). Stop it
+   with `Ctrl+C`, or run `docker compose down` in another terminal.
 
-To change capacity, rerun the same command with a different `--scale
-backend=N` value. Docker DNS and Nginx's dynamic upstream resolver refresh the
-set of backend container addresses without publishing a backend port.
+Database and Redis data are kept in Docker volumes, so they survive a normal
+`docker compose down`. To intentionally reset local data, run
+`docker compose down --volumes`.
 
 ### Load testing with k6
 
-Start the Docker stack first, then run the health-route test through Nginx. It
-defaults to 10 virtual users for 30 seconds and asserts fewer than 1% failed
+Start the Docker stack first, then run the health-route test. It defaults to 10
+virtual users for 30 seconds and asserts fewer than 1% failed
 requests with a 95th-percentile latency below 500 ms.
 
 ```bash
@@ -173,7 +168,7 @@ k6 run backend/load-tests/health.js
 If k6 is not installed locally, run it in Docker instead:
 
 ```bash
-docker run --rm --network backend_default -e BASE_URL=http://nginx -v "$PWD/backend/load-tests:/scripts:ro" grafana/k6 run /scripts/health.js
+docker run --rm --network backend_default -e BASE_URL=http://backend:5000 -v "$PWD/backend/load-tests:/scripts:ro" grafana/k6 run /scripts/health.js
 ```
 
 Increase load only after a smoke test succeeds:
