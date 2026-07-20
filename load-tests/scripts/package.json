@@ -1,0 +1,7 @@
+{
+  "name": "interiorai-load-test-scripts",
+  "version": "1.0.0",
+  "description": "Helper scripts for k6 load tests (token generation and cleanup).",
+  "type": "module",
+  "private": true
+}
