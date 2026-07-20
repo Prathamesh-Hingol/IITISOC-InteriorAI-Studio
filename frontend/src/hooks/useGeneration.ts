@@ -43,3 +43,14 @@ export function useGenerationDepth(generationId: string | undefined) {
     retry: 1,
   });
 }
+
+export function useGenerationDetail(generationId: string | undefined) {
+  const { getToken } = useAuth();
+
+  return useQuery({
+    queryKey: ["generation-detail", generationId],
+    queryFn: () => GenerationService.getGenerationDetail(generationId!, getToken),
+    enabled: Boolean(generationId),
+    retry: 1,
+  });
+}

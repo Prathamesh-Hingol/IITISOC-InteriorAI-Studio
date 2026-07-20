@@ -1,4 +1,4 @@
-import { Box, Download, Eye, Trash2, ImagePlus } from "lucide-react";
+import { Box, Download, Eye, Trash2, ImagePlus, Camera } from "lucide-react";
 import type { VersionNode, VersionEdge } from "../../types";
 
 interface VersionTreeProps {
@@ -9,6 +9,7 @@ interface VersionTreeProps {
 	onDeleteNode?: (id: string) => void;
 	onPreviewNode?: (node: VersionNode) => void;
 	onView3D?: (node: VersionNode) => void;
+	onMultiView?: (node: VersionNode) => void;
 }
 
 export function VersionTree({
@@ -19,6 +20,7 @@ export function VersionTree({
 	onPreviewNode,
 	onDeleteNode,
 	onView3D,
+	onMultiView,
 }: VersionTreeProps) {
 	const cardWidth = 200;
 	const cardHeight = 135;
@@ -202,16 +204,38 @@ export function VersionTree({
 								)}
 
 								{/* Hover overlay with action buttons */}
-								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-3 transition-all duration-200">
+								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition-all duration-200">
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											if (onPreviewNode) {
+												onPreviewNode(node);
+											}
+										}}
+										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+										title="Preview"
+									>
+										<Eye size={13} />
+									</button>
 									<button
 										onClick={(e) => {
 											e.stopPropagation();
 											onView3D?.(node);
 										}}
-										className="p-2.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
 										title="View in 3D"
 									>
-										<Box size={14} />
+										<Box size={13} />
+									</button>
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											onMultiView?.(node);
+										}}
+										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+										title="Multi-View"
+									>
+										<Camera size={13} />
 									</button>
 									<button
 										onClick={(e) => {
@@ -221,22 +245,10 @@ export function VersionTree({
 											}
 										}}
 										disabled={!node.image}
-										className="p-2.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
+										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
 										title="Download image"
 									>
-										<Download size={14} />
-									</button>
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											if (onPreviewNode) {
-												onPreviewNode(node);
-											}
-										}}
-										className="p-2.5 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
-										title="Preview"
-									>
-										<Eye size={14} />
+										<Download size={13} />
 									</button>
 									<button
 										onClick={(e) => {
@@ -245,10 +257,10 @@ export function VersionTree({
 												onDeleteNode(node.id);
 											}
 										}}
-										className="p-2.5 cursor-pointer bg-white/95 hover:bg-red-50 text-red-500 rounded-full transition-all shadow-sm hover:scale-110"
+										className="p-2 cursor-pointer bg-white/95 hover:bg-red-50 text-red-500 rounded-full transition-all shadow-sm hover:scale-110"
 										title="Delete"
 									>
-										<Trash2 size={14} />
+										<Trash2 size={13} />
 									</button>
 								</div>
 							</div>

@@ -11,6 +11,10 @@ const DepthViewerPage = lazy(() =>
   import("./pages/DepthViewerPage").then((module) => ({ default: module.DepthViewerPage })),
 );
 
+const MultiViewPage = lazy(() =>
+  import("./pages/MultiViewPage").then((module) => ({ default: module.MultiViewPage })),
+);
+
 // Initialize TanStack Query Client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,6 +89,22 @@ function App() {
                   <SignedIn>
                     <Suspense fallback={<div className="grid h-screen place-items-center bg-[#0b0b0d] text-sm text-white">Loading 3D viewer…</div>}>
                       <DepthViewerPage />
+                    </Suspense>
+                  </SignedIn>
+                  <SignedOut>
+                    <RedirectToSignIn />
+                  </SignedOut>
+                </>
+              }
+            />
+
+            <Route
+              path="/project/:projectId/generation/:generationId/multiview"
+              element={
+                <>
+                  <SignedIn>
+                    <Suspense fallback={<div className="grid h-screen place-items-center bg-[#0b0b0d] text-sm text-white">Loading Multi-View…</div>}>
+                      <MultiViewPage />
                     </Suspense>
                   </SignedIn>
                   <SignedOut>

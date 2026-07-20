@@ -210,6 +210,11 @@ export function StudioPage() {
 		navigate(`/project/${projectId}/generation/${node.id}/3d`);
 	};
 
+	const handleMultiView = (node: VersionNode) => {
+		if (!projectId || node.type === "placeholder") return;
+		navigate(`/project/${projectId}/generation/${node.id}/multiview`);
+	};
+
 	// Loading & Error States
 	if (isProjectLoading || isGenerationsLoading) {
 		return (
@@ -430,6 +435,7 @@ export function StudioPage() {
 								onDeleteNode={handleDeleteNode}
 								onPreviewNode={setPreviewNode}
 								onView3D={handleView3D}
+								onMultiView={handleMultiView}
 							/>
 						</Canvas>
 
