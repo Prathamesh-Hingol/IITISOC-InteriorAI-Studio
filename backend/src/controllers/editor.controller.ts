@@ -6,6 +6,7 @@ import axios from "axios";
 import type { AxiosResponse } from "axios";
 import dotenv from "dotenv";
 import { enqueueGeneration } from "../queues/ai-generation.queue";
+import { editorJobPayloadSchema } from "../queues/generation-job.schemas";
 
 dotenv.config();
 
@@ -475,6 +476,15 @@ export async function generate(
 		});
 		const nextIndex = totalGens + 1;
 		const title = `V${nextIndex}: ${validated.mode === "furniture-placement" ? "Furniture" : "Interior"} Edit`;
+		const payload = editorJobPayloadSchema.parse({
+			prompt: validated.prompt,
+			session_id: parentNode.id,
+			image_url: parentNode.imageUrl,
+			mask_url: validated.combinedMask,
+			reference_image_url: validated.furnitureReference || null,
+			edit_mode: validated.mode,
+			guidance: 8,
+		});
 
 		// Create a pending generation in DB
 		const dbGen = await prisma.generation.create({
@@ -491,22 +501,19 @@ export async function generate(
 						? "furnish-empty"
 						: "restyle",
 				status: "queued",
-				jobType: "editor",
-				jobPayload: {
-					prompt: validated.prompt, session_id: parentNode.id, image_url: parentNode.imageUrl,
-					mask_url: validated.combinedMask, reference_image_url: validated.furnitureReference || null,
-					edit_mode: validated.mode, guidance: 8,
-				},
-				queuedAt: new Date(),
+				job: { create: { type: "EDITOR", payload } },
 			},
 		});
 
 		try {
 			await enqueueGeneration(dbGen.id);
 		} catch (queueError) {
-			await prisma.generation.update({ where: { id: dbGen.id }, data: {
-				status: "failed", failedAt: new Date(), failureMessage: "Unable to queue generation",
-			}});
+			await prisma.$transaction([
+				prisma.generation.update({ where: { id: dbGen.id }, data: { status: "failed" } }),
+				prisma.generationJob.update({ where: { generationId: dbGen.id }, data: {
+					status: "FAILED", failedAt: new Date(), failureMessage: "Unable to queue generation",
+				}}),
+			]);
 			throw queueError;
 		}
 

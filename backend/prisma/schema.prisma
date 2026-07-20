@@ -41,16 +41,8 @@ model Generation {
   creativityStrength Int?
   generationMode     String? // "restyle" | "furnish-empty"
   status             String // "pending" | "completed" | "failed"
-  jobType            String?
-  jobPayload         Json?
-  queuedAt           DateTime?
-  startedAt          DateTime?
-  completedAt        DateTime?
-  failedAt           DateTime?
-  failureMessage     String?
-  attempts           Int          @default(0)
-  depthPreviewUrl    String?
-  depthRaw16Url      String?
+  job                GenerationJob?
+  depth              GenerationDepth?
   x                  Float?
   y                  Float?
   createdAt          DateTime     @default(now())
@@ -59,4 +51,43 @@ model Generation {
   @@index([status, createdAt])
   @@index([projectId, createdAt])
   @@index([parentId])
+}
+
+enum GenerationJobType {
+  ROOT
+  BRANCH
+  EDITOR
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model GenerationJob {
+  id             String            @id @default(uuid())
+  generationId   String            @unique
+  generation     Generation        @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  type           GenerationJobType
+  status         JobStatus         @default(QUEUED)
+  payload        Json
+  attempts       Int               @default(0)
+  queuedAt       DateTime          @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  failureMessage String?
+
+  @@index([status, queuedAt])
+}
+
+model GenerationDepth {
+  generationId String     @id
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  previewUrl   String?
+  raw16Url     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }

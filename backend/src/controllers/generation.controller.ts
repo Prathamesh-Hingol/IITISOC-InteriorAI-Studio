@@ -5,6 +5,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 import { AxiosResponse } from "axios";
 import { enqueueGeneration } from "../queues/ai-generation.queue";
+import { branchJobPayloadSchema, rootJobPayloadSchema } from "../queues/generation-job.schemas";
 dotenv.config();
 
 interface ModalRes {
@@ -86,6 +87,7 @@ export async function createGeneration(
 			let promptText = "Original room upload";
 
 			if (!imageUrl && validatedData.prompt) {
+				const payload = rootJobPayloadSchema.parse({ prompt: validatedData.prompt });
 				const queuedRoot = await prisma.generation.create({
 					data: {
 						title: "V1: Text to Image Base",
@@ -98,17 +100,18 @@ export async function createGeneration(
 						creativityStrength: validatedData.creativityStrength || 0,
 						generationMode: validatedData.generationMode || "restyle",
 						status: "queued",
-						jobType: "root",
-						jobPayload: { prompt: validatedData.prompt },
-						queuedAt: new Date(),
+						job: { create: { type: "ROOT", payload } },
 					},
 				});
 				try {
 					await enqueueGeneration(queuedRoot.id);
 				} catch (queueError) {
-					await prisma.generation.update({ where: { id: queuedRoot.id }, data: {
-						status: "failed", failedAt: new Date(), failureMessage: "Unable to queue generation",
-					}});
+					await prisma.$transaction([
+						prisma.generation.update({ where: { id: queuedRoot.id }, data: { status: "failed" } }),
+						prisma.generationJob.update({ where: { generationId: queuedRoot.id }, data: {
+							status: "FAILED", failedAt: new Date(), failureMessage: "Unable to queue generation",
+						}}),
+					]);
 					throw queueError;
 				}
 				return res.status(202).json(queuedRoot);
@@ -179,6 +182,7 @@ export async function createGeneration(
 
 			const generationIndex = totalGens + 1;
 			const title = `V${generationIndex}: ${preset} Luxe`;
+			const payload = branchJobPayloadSchema.parse({ prompt, image_url: parentNode.imageUrl });
 
 			// 1. Save Pending Generation in DB
 			const dbGen = await prisma.generation.create({
@@ -192,17 +196,18 @@ export async function createGeneration(
 					creativityStrength: strength,
 					generationMode: mode,
 					status: "queued",
-					jobType: "branch",
-					jobPayload: { prompt, image_url: parentNode.imageUrl },
-					queuedAt: new Date(),
+					job: { create: { type: "BRANCH", payload } },
 				},
 			});
 			try {
 				await enqueueGeneration(dbGen.id);
 			} catch (queueError) {
-				await prisma.generation.update({ where: { id: dbGen.id }, data: {
-					status: "failed", failedAt: new Date(), failureMessage: "Unable to queue generation",
-				}});
+				await prisma.$transaction([
+					prisma.generation.update({ where: { id: dbGen.id }, data: { status: "failed" } }),
+					prisma.generationJob.update({ where: { generationId: dbGen.id }, data: {
+						status: "FAILED", failedAt: new Date(), failureMessage: "Unable to queue generation",
+					}}),
+				]);
 				throw queueError;
 			}
 
@@ -250,18 +255,18 @@ export async function createGenerationDepth(
 
 		const generation = await prisma.generation.findUnique({
 			where: { id: generationId },
-			include: { project: true },
+			include: { project: true, depth: true },
 		});
 
 		if (!generation || generation.project.userId !== userId) {
 			return res.status(404).json({ error: "Generation not found" });
 		}
 
-		if (generation.depthPreviewUrl && generation.depthRaw16Url) {
+		if (generation.depth?.previewUrl && generation.depth.raw16Url) {
 			return res.json({
 				imageUrl: generation.imageUrl,
-				depthPreviewUrl: generation.depthPreviewUrl,
-				depthRaw16Url: generation.depthRaw16Url,
+				depthPreviewUrl: generation.depth.previewUrl,
+				depthRaw16Url: generation.depth.raw16Url,
 				cached: true,
 			});
 		}
@@ -285,18 +290,16 @@ export async function createGenerationDepth(
 			return res.status(502).json({ error: "Depth service returned incomplete assets" });
 		}
 
-		const updatedGeneration = await prisma.generation.update({
-			where: { id: generation.id },
-			data: {
-				depthPreviewUrl: depth_preview_url,
-				depthRaw16Url: depth_raw16_url,
-			},
+		const depth = await prisma.generationDepth.upsert({
+			where: { generationId: generation.id },
+			create: { generationId: generation.id, previewUrl: depth_preview_url, raw16Url: depth_raw16_url },
+			update: { previewUrl: depth_preview_url, raw16Url: depth_raw16_url },
 		});
 
 		return res.json({
-			imageUrl: updatedGeneration.imageUrl,
-			depthPreviewUrl: updatedGeneration.depthPreviewUrl,
-			depthRaw16Url: updatedGeneration.depthRaw16Url,
+			imageUrl: generation.imageUrl,
+			depthPreviewUrl: depth.previewUrl,
+			depthRaw16Url: depth.raw16Url,
 			cached: false,
 		});
 	} catch (error) {

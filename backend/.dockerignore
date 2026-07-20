@@ -1,9 +1,8 @@
 node_modules
-REDIS.md
 dist
 .env
 .env.*
 npm-debug.log
 .git
-Dockerfile*
+coverage
 README.md
