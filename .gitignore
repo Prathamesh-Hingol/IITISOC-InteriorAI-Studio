@@ -1,2 +1,8 @@
+# Load test secrets & generated files
+load-tests/.env.loadtest
+load-tests/fixtures/tokens.json
+load-tests/fixtures/test-user-ids.json
+load-tests/results/
+
 .agents
 skills-lock.json

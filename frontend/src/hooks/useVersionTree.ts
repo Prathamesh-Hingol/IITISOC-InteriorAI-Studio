@@ -115,7 +115,8 @@ export function useVersionTree(generations: any[]) {
     }
 
     const parentNodeObj = nodesList.find((n) => n.id === placeholderParentId);
-    if (parentNodeObj && parentNodeObj.status !== "pending") {
+    // A new variation can only branch from a completed image, not a queued job.
+    if (parentNodeObj && parentNodeObj.status === "Generated") {
       const pX = parentNodeObj.x! + 350;
       const existingChildren = childrenMap[placeholderParentId] || [];
       const pY = parentNodeObj.y! - (existingChildren.length * 100) + (existingChildren.length * 240);

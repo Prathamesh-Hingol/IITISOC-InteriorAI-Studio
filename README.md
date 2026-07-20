@@ -129,3 +129,56 @@ The frontend has been refactored into a **4-Layer Architecture**:
    npm run dev
    ```
    The client will open on [http://localhost:5173](http://localhost:5173).
+
+---
+
+## 5. Run the backend with Docker
+
+Docker starts PostgreSQL, Redis, database migrations, and the API. You only
+need Docker Desktop and your Clerk and Cloudinary credentials.
+
+1. Create the backend environment file:
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+   Fill in the Clerk and Cloudinary values. The supplied database settings work
+   for local Docker use; change `POSTGRES_PASSWORD` before deployment.
+2. Start the stack:
+   ```bash
+   cd backend
+   docker compose up --build
+   ```
+3. Open [http://localhost:5000/health](http://localhost:5000/health). Stop it
+   with `Ctrl+C`, or run `docker compose down` in another terminal.
+
+Database and Redis data are kept in Docker volumes, so they survive a normal
+`docker compose down`. To intentionally reset local data, run
+`docker compose down --volumes`.
+
+### Load testing with k6
+
+Start the Docker stack first, then run the health-route test. It defaults to 10
+virtual users for 30 seconds and asserts fewer than 1% failed
+requests with a 95th-percentile latency below 500 ms.
+
+```bash
+k6 run backend/load-tests/health.js
+```
+
+If k6 is not installed locally, run it in Docker instead:
+
+```bash
+docker run --rm --network backend_default -e BASE_URL=http://backend:5000 -v "$PWD/backend/load-tests:/scripts:ro" grafana/k6 run /scripts/health.js
+```
+
+Increase load only after a smoke test succeeds:
+
+```bash
+k6 run -e VUS=50 -e DURATION=2m backend/load-tests/health.js
+```
+
+Set `BASE_URL` to load test a deployed environment, for example
+`-e BASE_URL=https://api.example.com`. The default endpoint is `/api/health`,
+which is safe from the API rate limiter. To measure database and Redis
+readiness as well, use `-e ENDPOINT=/api/ready`; this intentionally adds a
+database query and Redis ping to every request.

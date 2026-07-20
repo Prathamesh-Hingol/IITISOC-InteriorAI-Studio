@@ -5,14 +5,14 @@
 Start Redis from the backend directory:
 
 ```bash
-docker compose -f docker-compose.redis.yml up -d
+docker compose up -d redis
 ```
 
 The backend defaults to `redis://127.0.0.1:6379` outside production, so no
 local environment variable is required. Stop the service with:
 
 ```bash
-docker compose -f docker-compose.redis.yml down
+docker compose stop redis
 ```
 
 ## Managed Redis
@@ -38,3 +38,16 @@ connection for Redis-backed rate limits now and BullMQ jobs later.
 
 `/health`, `/api/health`, and `/api/ready` are excluded from the global limit.
 Rate-limit counters are stored in Redis and return HTTP `429` when exceeded.
+
+## AI generation worker
+
+Start the API and the worker in separate terminals after Redis is running:
+
+```bash
+npm run dev
+npm run worker:dev
+```
+
+AI requests return HTTP `202` with a generation in `queued` status. The worker
+processes one job at a time, retries transient failures up to three times, and
+updates the generation to `completed` or `failed` in PostgreSQL.

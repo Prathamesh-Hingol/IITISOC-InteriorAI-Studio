@@ -4,6 +4,7 @@ import { z } from "zod";
 import axios from "axios";
 import dotenv from "dotenv";
 import { AxiosResponse } from "axios";
+import { enqueueGeneration } from "../queues/ai-generation.queue";
 dotenv.config();
 
 interface ModalRes {
@@ -85,6 +86,35 @@ export async function createGeneration(
 			let promptText = "Original room upload";
 
 			if (!imageUrl && validatedData.prompt) {
+				const queuedRoot = await prisma.generation.create({
+					data: {
+						title: "V1: Text to Image Base",
+						projectId: validatedData.projectId,
+						parentId: null,
+						// The UI replaces this placeholder when the worker completes.
+						imageUrl: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1024&q=80",
+						prompt: validatedData.prompt,
+						preset: validatedData.preset || "Minimalist",
+						creativityStrength: validatedData.creativityStrength || 0,
+						generationMode: validatedData.generationMode || "restyle",
+						status: "queued",
+						jobType: "root",
+						jobPayload: { prompt: validatedData.prompt },
+						queuedAt: new Date(),
+					},
+				});
+				try {
+					await enqueueGeneration(queuedRoot.id);
+				} catch (queueError) {
+					await prisma.generation.update({ where: { id: queuedRoot.id }, data: {
+						status: "failed", failedAt: new Date(), failureMessage: "Unable to queue generation",
+					}});
+					throw queueError;
+				}
+				return res.status(202).json(queuedRoot);
+			}
+
+			if (!imageUrl && validatedData.prompt) {
 				title = "V1: Text to Image Base";
 				promptText = validatedData.prompt;
 
@@ -151,7 +181,7 @@ export async function createGeneration(
 			const title = `V${generationIndex}: ${preset} Luxe`;
 
 			// 1. Save Pending Generation in DB
-			let dbGen = await prisma.generation.create({
+			const dbGen = await prisma.generation.create({
 				data: {
 					title,
 					projectId: validatedData.projectId,
@@ -161,44 +191,22 @@ export async function createGeneration(
 					preset,
 					creativityStrength: strength,
 					generationMode: mode,
-					status: "pending",
+					status: "queued",
+					jobType: "branch",
+					jobPayload: { prompt, image_url: parentNode.imageUrl },
+					queuedAt: new Date(),
 				},
 			});
-
-			// 2. Wait 2 seconds to simulate AI pipeline processing
-			// await new Promise((resolve) => setTimeout(resolve, 2000));
-
-			// Choose image preset URL
-			// const mockImage = MOCK_IMAGES[preset] || MOCK_IMAGES.Scandinavian;
-			const kontextEndpoint=process.env.GENERATION_ENDPOINT2
-			const generationRes: AxiosResponse<kontextRes> = await axios.post<kontextRes>(
-				`${kontextEndpoint}/generate`,
-				{
-					prompt,
-					image_url: parentNode.imageUrl,
-				},
-				{
-					headers: {
-						"Content-Type": "application/json",
-					},
-				},
-			);
-			if (!generationRes.data || !generationRes.data.output_url) {
-				return res.status(500).json({
-					error: "Modal response error",
-				});
+			try {
+				await enqueueGeneration(dbGen.id);
+			} catch (queueError) {
+				await prisma.generation.update({ where: { id: dbGen.id }, data: {
+					status: "failed", failedAt: new Date(), failureMessage: "Unable to queue generation",
+				}});
+				throw queueError;
 			}
-			const generation_url = generationRes.data.output_url;
-			// 3. Update status to completed and set image URL
-			dbGen = await prisma.generation.update({
-				where: { id: dbGen.id },
-				data: {
-					status: "completed",
-					imageUrl: generation_url,
-				},
-			});
 
-			return res.status(201).json(dbGen);
+			return res.status(202).json(dbGen);
 		}
 	} catch (error) {
 		next(error);
