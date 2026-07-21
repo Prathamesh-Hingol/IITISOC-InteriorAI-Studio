@@ -81,7 +81,7 @@ export async function createGenerationView(
 					image_url: generation.imageUrl,
 					angle,
 				},
-				{ headers: { "Content-Type": "application/json" } },
+				{ headers: { "Content-Type": "application/json" }, timeout: 300_000 },
 			);
 
 		if (!viewResponse.data?.url) {

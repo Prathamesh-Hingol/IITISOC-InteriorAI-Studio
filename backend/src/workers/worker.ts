@@ -6,29 +6,29 @@ import { AI_GENERATION_QUEUE, type AiGenerationJobData } from "../queues/ai-gene
 import {
   branchJobPayloadSchema,
   editorJobPayloadSchema,
-  rootJobPayloadSchema,
 } from "../queues/generation-job.schemas";
 
 interface ModalResponse { cloudinary_url: string }
 interface OutputUrlResponse { output_url: string }
 
 async function executeGenerationJob(type: "ROOT" | "BRANCH" | "EDITOR", payload: unknown): Promise<string> {
-  if (type === "ROOT") {
-    const endpoint = process.env.GENERATION_ENDPOINT;
-    if (!endpoint) throw new Error("GENERATION_ENDPOINT is not configured");
-    const data = rootJobPayloadSchema.parse(payload);
-    const response: AxiosResponse<ModalResponse> = await axios.post(
-      `${endpoint}/generate`, { prompt: data.prompt }, { timeout: 180_000, headers: { "Content-Type": "application/json" } },
-    );
-    return response.data.cloudinary_url;
-  }
+  // if (type === "ROOT") {
+  //   const endpoint = process.env.GENERATION_ENDPOINT;
+  //   if (!endpoint) throw new Error("GENERATION_ENDPOINT is not configured");
+  //   const data = rootJobPayloadSchema.parse(payload);
+  //   const response: AxiosResponse<ModalResponse> = await axios.post(
+  //     `${endpoint}/generate`, { prompt: data.prompt }, { timeout: 300_000, headers: { "Content-Type": "application/json" } },
+  //   );
+  //   return response.data.cloudinary_url;
+  // }
 
   if (type === "BRANCH") {
     const endpoint = process.env.GENERATION_ENDPOINT2;
     if (!endpoint) throw new Error("GENERATION_ENDPOINT2 is not configured");
     const data = branchJobPayloadSchema.parse(payload);
+    console.log("kontext req recaeived by worker transfering to ai service")
     const response: AxiosResponse<OutputUrlResponse> = await axios.post(
-      `${endpoint}/generate`, data, { timeout: 180_000, headers: { "Content-Type": "application/json" } },
+      `${endpoint}/generate`, data, {headers: { "Content-Type": "application/json" } },
     );
     return response.data.output_url;
   }
@@ -36,8 +36,9 @@ async function executeGenerationJob(type: "ROOT" | "BRANCH" | "EDITOR", payload:
   const endpoint = process.env.SAM_ENDPOINT;
   if (!endpoint) throw new Error("SAM_ENDPOINT is not configured");
   const data = editorJobPayloadSchema.parse(payload);
+  console.log("sam generation received by worker tranfering to ai service")
   const response: AxiosResponse<OutputUrlResponse> = await axios.post(
-    `${endpoint}/generate`, data, { timeout: 180_000, headers: { "Content-Type": "application/json" } },
+    `${endpoint}/generate`, data, {headers: { "Content-Type": "application/json" } },
   );
   return response.data.output_url;
 }

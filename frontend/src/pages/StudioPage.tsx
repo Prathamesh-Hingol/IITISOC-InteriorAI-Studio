@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Box, Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye } from "lucide-react";
+import { Box, Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye, XCircle } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { LeftSidebar } from "../components/sidebar/LeftSidebar";
 import { Canvas } from "../components/workspace/Canvas";
@@ -117,6 +117,7 @@ export function StudioPage() {
 	const handleBaseImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) return;
+		setOnboardingError(null);
 
 		uploadImageMutation.mutate(file, {
 			onSuccess: (uploadRes) => {
@@ -129,8 +130,18 @@ export function StudioPage() {
 						onSuccess: (newGen) => {
 							selectNode(newGen.id);
 						},
+						onError: (err: any) => {
+							setOnboardingError(err?.message || "Failed to create generation. Please try again.");
+							// Reset file input so the same file can be re-selected
+							if (fileInputRef.current) fileInputRef.current.value = "";
+						},
 					}
 				);
+			},
+			onError: (err: any) => {
+				setOnboardingError(err?.message || "Failed to upload image. Please try again.");
+				// Reset file input so the same file can be re-selected
+				if (fileInputRef.current) fileInputRef.current.value = "";
 			},
 		});
 	};
@@ -160,10 +171,14 @@ export function StudioPage() {
 	};
 
 	const [onboardingPrompt, setOnboardingPrompt] = useState("");
+	const [onboardingError, setOnboardingError] = useState<string | null>(null);
+	// Used to reset file input so onChange fires even if same file is re-selected
+	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const handleBasePromptGeneration = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!onboardingPrompt.trim() || createGenerationMutation.isPending) return;
+		setOnboardingError(null);
 
 		createGenerationMutation.mutate(
 			{
@@ -177,6 +192,9 @@ export function StudioPage() {
 				onSuccess: (newGen) => {
 					selectNode(newGen.id);
 					setOnboardingPrompt("");
+				},
+				onError: (err: any) => {
+					setOnboardingError(err?.message || "Generation failed. Please try again.");
 				},
 			}
 		);
@@ -316,7 +334,26 @@ export function StudioPage() {
 
 				{/* Project Onboarding Screen (Two options to start) */}
 				{nodes.length === 0 ? (
-					<div className="flex-1 h-full flex flex-col items-center justify-center p-6 md:p-12 bg-[#faf8f7] overflow-y-auto">
+					<div className="flex-1 h-full flex flex-col items-center justify-center p-6 md:p-12 bg-[#faf8f7] overflow-y-auto relative">
+						{/* Full-screen loading overlay while mutations are in-flight */}
+						{(uploadImageMutation.isPending || createGenerationMutation.isPending) && (
+							<div className="absolute inset-0 z-20 bg-[#faf8f7]/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+								<div className="w-16 h-16 rounded-full bg-white border border-[#efeded] shadow-md flex items-center justify-center">
+									<Loader2 size={28} className="animate-spin text-primary" />
+								</div>
+								<div className="text-center">
+									<p className="text-sm font-bold text-primary">
+										{uploadImageMutation.isPending ? "Uploading image…" : "Queuing generation…"}
+									</p>
+									<p className="text-xs text-on-surface-variant mt-1">
+										{uploadImageMutation.isPending
+											? "Sending your room photo to the server…"
+											: "Setting up your workspace node…"}
+									</p>
+								</div>
+							</div>
+						)}
+
 						<motion.div
 							initial={{ opacity: 0, y: 15 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -334,6 +371,20 @@ export function StudioPage() {
 								</p>
 							</div>
 
+							{/* Error Banner */}
+							{onboardingError && (
+								<div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 text-xs font-medium px-4 py-3 rounded-2xl max-w-lg mx-auto shadow-sm">
+									<AlertCircle size={15} className="shrink-0 mt-0.5 text-red-500" />
+									<span className="flex-1 text-left">{onboardingError}</span>
+									<button
+										onClick={() => setOnboardingError(null)}
+										className="shrink-0 text-red-400 hover:text-red-600 cursor-pointer transition-colors"
+									>
+										<XCircle size={15} />
+									</button>
+								</div>
+							)}
+
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full items-stretch">
 								{/* Option 1: Upload Room Image */}
 								<div className="flex flex-col p-8 rounded-3xl bg-white border border-[#efeded] hover:border-primary/20 shadow-[0_15px_40px_-15px_rgba(0,54,45,0.03)] hover:shadow-[0_20px_50px_-15px_rgba(0,54,45,0.06)] transition-all duration-300 items-center justify-between text-center gap-6 group">
@@ -349,12 +400,9 @@ export function StudioPage() {
 
 									<label className="w-full flex items-center justify-center gap-2 h-11 bg-primary hover:bg-primary-container text-white text-xs font-bold rounded-xl cursor-pointer shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]">
 										<ImagePlus size={14} />
-										<span>
-											{uploadImageMutation.isPending || createGenerationMutation.isPending
-												? "Uploading..."
-												: "Select Room Image"}
-										</span>
+										<span>Select Room Image</span>
 										<input
+											ref={fileInputRef}
 											type="file"
 											accept="image/*"
 											className="hidden"
@@ -405,13 +453,6 @@ export function StudioPage() {
 									</button>
 								</form>
 							</div>
-
-							{(uploadImageMutation.isPending || createGenerationMutation.isPending) && (
-								<div className="flex items-center justify-center gap-2 text-xs text-on-surface-variant font-medium animate-pulse mt-4 bg-white/60 border border-[#efeded] py-3 px-6 rounded-2xl max-w-sm mx-auto shadow-sm backdrop-blur-sm">
-									<Loader2 size={14} className="animate-spin text-primary" />
-									<span>Processing base workspace image...</span>
-								</div>
-							)}
 						</motion.div>
 					</div>
 				) : (

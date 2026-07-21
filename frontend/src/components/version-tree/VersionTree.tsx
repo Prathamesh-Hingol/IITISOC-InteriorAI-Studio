@@ -1,4 +1,4 @@
-import { Box, Download, Eye, Trash2, ImagePlus, Camera } from "lucide-react";
+import { Box, Download, Eye, Trash2, ImagePlus, Camera, Loader2, AlertCircle } from "lucide-react";
 import type { VersionNode, VersionEdge } from "../../types";
 
 interface VersionTreeProps {
@@ -193,7 +193,23 @@ export function VersionTree({
 						>
 							{/* Image Preview Area */}
 							<div className="relative aspect-video w-full rounded-lg overflow-hidden bg-[#efeded] border border-[#efeded]/80">
-								{node.image ? (
+								{node.status === "queued" || node.status === "processing" ? (
+									// ── Loading Shimmer Skeleton ──
+									<div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#f0eeec] via-[#e8e5e2] to-[#f0eeec] animate-pulse">
+										{/* Shimmer sweep */}
+										<div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-[shimmer_1.5s_infinite] -translate-x-full" style={{ animation: "shimmer 1.5s infinite" }} />
+										<Loader2 size={16} className="text-primary/60 animate-spin mb-1" />
+										<span className="text-[9px] font-semibold text-primary/50 uppercase tracking-wider">
+											{node.status === "processing" ? "Generating…" : "Queued"}
+										</span>
+									</div>
+								) : node.status === "failed" ? (
+									// ── Failed State ──
+									<div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50">
+										<AlertCircle size={16} className="text-red-400 mb-1" />
+										<span className="text-[9px] font-semibold text-red-400 uppercase tracking-wider">Failed</span>
+									</div>
+								) : node.image ? (
 									<img
 										src={node.image}
 										alt={node.title}
@@ -203,66 +219,83 @@ export function VersionTree({
 									<div className="w-full h-full bg-[#efeded]" />
 								)}
 
-								{/* Hover overlay with action buttons */}
-								<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition-all duration-200">
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											if (onPreviewNode) {
-												onPreviewNode(node);
-											}
-										}}
-										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
-										title="Preview"
-									>
-										<Eye size={13} />
-									</button>
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											onView3D?.(node);
-										}}
-										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
-										title="View in 3D"
-									>
-										<Box size={13} />
-									</button>
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											onMultiView?.(node);
-										}}
-										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
-										title="Multi-View"
-									>
-										<Camera size={13} />
-									</button>
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											if (node.image) {
-												void handleDownload(node.image, node.title);
-											}
-										}}
-										disabled={!node.image}
-										className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
-										title="Download image"
-									>
-										<Download size={13} />
-									</button>
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											if (onDeleteNode) {
-												onDeleteNode(node.id);
-											}
-										}}
-										className="p-2 cursor-pointer bg-white/95 hover:bg-red-50 text-red-500 rounded-full transition-all shadow-sm hover:scale-110"
-										title="Delete"
-									>
-										<Trash2 size={13} />
-									</button>
-								</div>
+								{/* Hover overlay — only show when image is ready */}
+								{node.status === "completed" && (
+									<div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition-all duration-200">
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												if (onPreviewNode) {
+													onPreviewNode(node);
+												}
+											}}
+											className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+											title="Preview"
+										>
+											<Eye size={13} />
+										</button>
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												onView3D?.(node);
+											}}
+											className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+											title="View in 3D"
+										>
+											<Box size={13} />
+										</button>
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												onMultiView?.(node);
+											}}
+											className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
+											title="Multi-View"
+										>
+											<Camera size={13} />
+										</button>
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												if (node.image) {
+													void handleDownload(node.image, node.title);
+												}
+											}}
+											disabled={!node.image}
+											className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
+											title="Download image"
+										>
+											<Download size={13} />
+										</button>
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												if (onDeleteNode) {
+													onDeleteNode(node.id);
+												}
+											}}
+											className="p-2 cursor-pointer bg-white/95 hover:bg-red-50 text-red-500 rounded-full transition-all shadow-sm hover:scale-110"
+											title="Delete"
+										>
+											<Trash2 size={13} />
+										</button>
+									</div>
+								)}
+								{/* Always show delete button for failed nodes */}
+								{node.status === "failed" && (
+									<div className="absolute inset-0 flex items-end justify-end p-1.5">
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												if (onDeleteNode) onDeleteNode(node.id);
+											}}
+											className="p-1.5 cursor-pointer bg-white/95 hover:bg-red-50 text-red-500 rounded-full transition-all shadow-sm hover:scale-110"
+											title="Remove"
+										>
+											<Trash2 size={11} />
+										</button>
+									</div>
+								)}
 							</div>
 
 							{/* Node Metadata (Bottom part of card) */}

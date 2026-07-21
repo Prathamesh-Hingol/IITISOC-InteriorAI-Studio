@@ -10,7 +10,8 @@ export function useGetProjectGenerations(projectId: string | undefined) {
     queryFn: () => ProjectService.getProjectGenerations(projectId!, getToken),
     enabled: isLoaded && isSignedIn && !!projectId,
     refetchOnWindowFocus: false, // Prevent unnecessary layouts during tab switches
-    // Keep queued cards fresh without polling once all work is complete.
+    // Poll every 3s while any branch generation is queued or processing,
+    // then stop once all are in a terminal state (completed / failed).
     refetchInterval: (query) => {
       const generations = query.state.data as Array<{ status: string }> | undefined;
       return generations?.some((generation) =>

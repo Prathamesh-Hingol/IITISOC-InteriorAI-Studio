@@ -44,7 +44,7 @@ export function LandingPage() {
 			<Navbar />
 
 			{/* Hero Section */}
-			<section className="relative min-h-[90vh] flex items-center justify-center pt-20 overflow-hidden px-6">
+			<section className="relative min-h-[100vh] flex items-center justify-center pt-20 overflow-hidden px-6">
 				{/* Background Image with Overlay */}
 				<div className="absolute inset-0 z-0">
 					<img

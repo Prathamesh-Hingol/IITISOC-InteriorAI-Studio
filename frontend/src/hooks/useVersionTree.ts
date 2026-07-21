@@ -86,7 +86,7 @@ export function useVersionTree(generations: any[]) {
         preset: node.preset || undefined,
         creativityStrength: node.creativityStrength || undefined,
         generationMode: node.generationMode || undefined,
-        status: node.status === "completed" ? "Generated" : node.status,
+        status: node.status, // raw DB value: "queued" | "processing" | "failed" | "completed"
       });
 
       const children = childrenMap[node.id] || [];
@@ -116,7 +116,7 @@ export function useVersionTree(generations: any[]) {
 
     const parentNodeObj = nodesList.find((n) => n.id === placeholderParentId);
     // A new variation can only branch from a completed image, not a queued job.
-    if (parentNodeObj && parentNodeObj.status === "Generated") {
+    if (parentNodeObj && parentNodeObj.status === "completed") {
       const pX = parentNodeObj.x! + 350;
       const existingChildren = childrenMap[placeholderParentId] || [];
       const pY = parentNodeObj.y! - (existingChildren.length * 100) + (existingChildren.length * 240);

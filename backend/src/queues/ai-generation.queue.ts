@@ -9,7 +9,7 @@ export const aiGenerationQueue = new Queue<AiGenerationJobData>(AI_GENERATION_QU
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
-    backoff: { type: "exponential", delay: 5_000 },
+    backoff: { type: "exponential", delay: 10_000 },
     removeOnComplete: 1_000,
     removeOnFail: 1_000,
   },

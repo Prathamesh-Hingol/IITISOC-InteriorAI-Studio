@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/db";
 import { z } from "zod";
-import axios from "axios";
+import axios, { type AxiosResponse } from "axios";
 import dotenv from "dotenv";
-import { AxiosResponse } from "axios";
 import { enqueueGeneration } from "../queues/ai-generation.queue";
-import { branchJobPayloadSchema, rootJobPayloadSchema } from "../queues/generation-job.schemas";
+import { branchJobPayloadSchema } from "../queues/generation-job.schemas";
+
 dotenv.config();
 
 interface ModalRes {
@@ -15,9 +15,7 @@ interface ModalRes {
     steps_skipped:number,
 }
 
-interface kontextRes {
-	"output_url":string,
-}
+
 
 interface DepthResponse {
 	depth_preview_url: string;
@@ -25,6 +23,7 @@ interface DepthResponse {
 }
 
 export const createGenerationSchema = z.object({
+
 	projectId: z.string().uuid("Invalid project ID"),
 	parentId: z.string().uuid("Invalid parent ID").nullable().optional(),
 	imageUrl: z.string().url("Invalid image URL").optional(),
@@ -34,19 +33,7 @@ export const createGenerationSchema = z.object({
 	generationMode: z.enum(["restyle", "furnish-empty"]).optional(),
 });
 
-// Style preset mock images
-const MOCK_IMAGES: Record<string, string> = {
-	Modern:
-		"https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=600&q=80",
-	Minimalist:
-		"https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=600&q=80",
-	Luxury:
-		"https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80",
-	Scandinavian:
-		"https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=600&q=80",
-	Industrial:
-		"https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?auto=format&fit=crop&w=600&q=80",
-};
+
 
 export async function createGeneration(
 	req: Request,
@@ -87,63 +74,30 @@ export async function createGeneration(
 			let promptText = "Original room upload";
 
 			if (!imageUrl && validatedData.prompt) {
-				const payload = rootJobPayloadSchema.parse({ prompt: validatedData.prompt });
-				const queuedRoot = await prisma.generation.create({
-					data: {
-						title: "V1: Text to Image Base",
-						projectId: validatedData.projectId,
-						parentId: null,
-						// The UI replaces this placeholder when the worker completes.
-						imageUrl: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1024&q=80",
-						prompt: validatedData.prompt,
-						preset: validatedData.preset || "Minimalist",
-						creativityStrength: validatedData.creativityStrength || 0,
-						generationMode: validatedData.generationMode || "restyle",
-						status: "queued",
-						job: { create: { type: "ROOT", payload } },
-					},
-				});
-				try {
-					await enqueueGeneration(queuedRoot.id);
-				} catch (queueError) {
-					await prisma.$transaction([
-						prisma.generation.update({ where: { id: queuedRoot.id }, data: { status: "failed" } }),
-						prisma.generationJob.update({ where: { generationId: queuedRoot.id }, data: {
-							status: "FAILED", failedAt: new Date(), failureMessage: "Unable to queue generation",
-						}}),
-					]);
-					throw queueError;
-				}
-				return res.status(202).json(queuedRoot);
-			}
-
-			if (!imageUrl && validatedData.prompt) {
 				title = "V1: Text to Image Base";
 				promptText = validatedData.prompt;
 
-				// Generate root node from text prompt using FLUX Schnell
+				// ── Synchronous text-to-image via FLUX Schnell ──────────────────────
+				// The request blocks here until the image is ready (up to 5 min).
+				// The frontend keeps the onboarding screen visible (isLoading=true)
+				// and only navigates to the studio once the 201 response arrives
+				// with a real imageUrl — no queueing or polling needed.
 				const genEndpoint = process.env.GENERATION_ENDPOINT;
-				if (genEndpoint) {
-					try {
-						console.log(`[Root-Gen] Calling FLUX Schnell for text prompt: "${promptText}"`);
-						const response: AxiosResponse<ModalRes> = await axios.post<ModalRes>(
-							`${genEndpoint}/generate`,
-							{ prompt: promptText },
-							{ headers: { "Content-Type": "application/json" }}
-						);
-
-						if (response.data?.cloudinary_url) {
-							imageUrl = response.data.cloudinary_url;
-						}
-					} catch (genError: any) {
-						console.error("FLUX Schnell root generation failed, using fallback:", genError.message);
-					}
+				if (!genEndpoint) {
+					return res.status(503).json({ error: "Image generation service is not configured" });
 				}
 
-				// Fallback if endpoint is not set or failed
-				if (!imageUrl) {
-					imageUrl = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1024&q=80";
+				console.log(`[Root-Gen] Calling FLUX Schnell synchronously for prompt: "${promptText}"`);
+				const response: AxiosResponse<ModalRes> = await axios.post<ModalRes>(
+					`${genEndpoint}/generate`,
+					{ prompt: promptText },
+					{ headers: { "Content-Type": "application/json" }},
+				);
+
+				if (!response.data?.cloudinary_url) {
+					return res.status(502).json({ error: "Image generation service returned no image" });
 				}
+				imageUrl = response.data.cloudinary_url;
 			}
 
 			const originalNode = await prisma.generation.create({
@@ -200,6 +154,7 @@ export async function createGeneration(
 				},
 			});
 			try {
+				console.log("kontext generation added to the queue")
 				await enqueueGeneration(dbGen.id);
 			} catch (queueError) {
 				await prisma.$transaction([
