@@ -1,184 +1,323 @@
-# InteriorAI Studio - Production Architecture Documentation
+# InteriorAI Studio — Production Architecture & System Documentation
 
-This project has been refactored from a static frontend demo into a production-ready, backend-driven application with Clerk authentication, a PostgreSQL database, Cloudinary uploads, and an API-driven branching version tree.
+InteriorAI Studio is a production-grade, full-stack AI interior design workspace. It enables users to upload room photographs, generate AI-driven interior restyles and furnishings, explore design variations using an interactive **branching version tree canvas**, edit image regions, and view generated interiors in **interactive 3D**.
 
-## Technical Architecture Overview
+---
 
-The system is split into a client-server architecture:
+## Table of Contents
+
+1. [Executive Summary & Key Features](#1-executive-summary--key-features)
+2. [System Architecture & High-Level Design](#2-system-architecture--high-level-design)
+3. [Technology Stack Reference](#3-technology-stack-reference)
+4. [Database Architecture & Data Models](#4-database-architecture--data-models)
+5. [Backend Architecture & API Reference](#5-backend-architecture--api-reference)
+6. [Frontend Architecture & UI Design System](#6-frontend-architecture--ui-design-system)
+7. [Security, Authentication & Cloudinary Media Engine](#7-security-authentication--cloudinary-media-engine)
+8. [AWS Cloud Deployment Architecture](#8-aws-cloud-deployment-architecture)
+9. [AI Services & External Repositories](#9-ai-services--external-repositories)
+10. [Local Development & Setup Guide](#10-local-development--setup-guide)
+
+---
+
+## 1. Executive Summary & Key Features
+
+### Business & User Goals
+InteriorAI Studio transforms static room photographs into customizable, AI-generated design concepts. Users can experiment with room layouts, furniture placement, and design presets without destroying prior iterations.
+
+### Core Features
+- **Project Workspaces**: User-owned design workspaces organizing generations.
+- **Branching Version Tree Canvas**: An interactive SVG + Canvas tree visualizer where every design variation branches from a parent generation node. Users can select any previous iteration node and spawn child concepts.
+- **AI Restyle & Furnishing Pipeline**: Generates high-resolution restyled room layouts based on prompts, creativity strength, and design presets.
+- **AI Image Editor**: Region-based editing canvas for fine-tuning specific interior elements.
+- **3D Depth Viewer**: Interactive 3D spatial depth visualization of generated rooms.
+- **Cloudinary Media Pipeline**: Direct streaming of uploaded assets to Cloudinary (no local disk or S3 dependency).
+
+---
+
+## 2. System Architecture & High-Level Design
+
+The application follows a decoupled client-server micro-service model. The frontend React application interacts with the Express backend via REST APIs secured by Clerk JWT tokens.
 
 ```mermaid
 graph TD
-    A[Vite + React Frontend] -->|Auth Token| B[Express REST API]
-    B -->|Prisma Client| C[(PostgreSQL Database)]
-    A -->|Upload Form Data| B
-    B -->|Upload Stream| D[Cloudinary Storage]
-    B -->|Session Verification| E[Clerk Auth Service]
+    User["User Browser"] -->|"REST API + Clerk Token"| ALB["AWS Application Load Balancer"]
+    ALB -->|"Forward Request"| ECS["AWS ECS Fargate - API Tasks"]
+    ECS -->|"Auth Verification"| Clerk["Clerk Auth Service"]
+    ECS -->|"Prisma Client Queries"| DB[("PostgreSQL Database")]
+    ECS -->|"Background Jobs & Queues"| EC[("AWS ElastiCache for Redis")]
+    ECS -->|"Direct Stream Upload"| Cloudinary["Cloudinary Media Engine"]
+    ECS -->|"Inference Requests"| AIServices["External AI Micro-Services"]
+```
+
+### Request & Data Flow Lifecycle
+1. **User Request & Auth**: The client browser sends HTTP requests with a Clerk session Bearer Token in the `Authorization` header.
+2. **Token Verification & Sync**: The backend `@clerk/express` middleware validates the JWT. The `syncUser` middleware automatically syncs user profiles to the PostgreSQL database.
+3. **API Processing**: Express route handlers validate input with **Zod** schemas and invoke business operations.
+4. **Data Persistence & Tree Traversal**: The backend reads/writes project and version nodes using **Prisma ORM** over PostgreSQL.
+5. **Cloudinary Media Pipeline**: Image upload endpoints handle multipart requests using `multer` in-memory storage and stream file buffers straight to **Cloudinary**. Cloudinary serves as the single source of truth for all room photographs and AI-generated image assets.
+
+---
+
+## 3. Technology Stack Reference
+
+| Layer | Technologies Used |
+| :--- | :--- |
+| **Frontend Framework** | React 18, Vite, TypeScript |
+| **State Management** | TanStack (React) Query v5, Local State Hooks |
+| **UI & Styling** | Vanilla CSS Tokens, Tailwind CSS, Lucide React Icons |
+| **Canvas & Visuals** | HTML5 Canvas, SVG Connectors, Three.js / Depth Shaders |
+| **Backend Runtime** | Node.js (v18+), Express.js, TypeScript |
+| **Input Validation** | Zod Schemas |
+| **Database & ORM** | PostgreSQL, Prisma ORM |
+| **Auth & Identity** | Clerk (`@clerk/clerk-react`, `@clerk/express`) |
+| **Media Hosting** | Cloudinary API & Streaming Engine (No S3 used) |
+| **Queue & Caching** | AWS ElastiCache for Redis, BullMQ |
+| **AWS Cloud Infrastructure** | AWS ECR, AWS ECS Fargate, AWS ElastiCache Redis, AWS ALB |
+
+---
+
+## 4. Database Architecture & Data Models
+
+### Database Choice: **PostgreSQL**
+PostgreSQL was selected for application database hosting:
+1. **Parent-Child Tree Representation**: Version trees use self-referential parent keys (`parentId`). PostgreSQL handles tree queries efficiently via **Recursive Common Table Expressions (CTEs)**.
+2. **Strict Referential Integrity**: Uses `ON DELETE CASCADE` to prevent orphaned branch nodes when parent versions are deleted.
+3. **Relational Schema**: Manages user accounts, projects, and branching generations.
+
+### Data Model Schema (Prisma)
+
+```mermaid
+erDiagram
+    USER ||--o{ PROJECT : owns
+    PROJECT ||--o{ GENERATION : contains
+    GENERATION ||--o{ GENERATION : branches
+    
+    USER {
+        string id PK
+        string email
+        string firstName
+        string lastName
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    PROJECT {
+        string id PK
+        string title
+        string description
+        string userId FK
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    GENERATION {
+        string id PK
+        string projectId FK
+        string parentId FK
+        string imageUrl
+        string prompt
+        string preset
+        float creativityStrength
+        string generationMode
+        string status
+        float x
+        float y
+        datetime createdAt
+        datetime updatedAt
+    }
 ```
 
 ---
 
-## 1. Database Selection & Justification
+## 5. Backend Architecture & API Reference
 
-### Selected Database: **PostgreSQL**
-We selected PostgreSQL over MongoDB for the following architectural reasons:
-
-1. **Tree Representation & Traversal (Recursive CTEs)**: The version history is represented as a branching tree (each child node branches from a parent). PostgreSQL natively supports **Recursive Common Table Expressions (CTEs)**. This allows the API to fetch the entire tree of variations for a project and calculate their positioning coordinates in a single database query.
-2. **Referential Integrity**: An AI version tree is sensitive to orphaned nodes. If a parent generation is deleted, all child branches originating from it must either be cleaned up or cascade deleted. PostgreSQL enforces strict foreign keys (`ON DELETE CASCADE`), ensuring database-level tree integrity.
-3. **Collaboration & Relational Extensions**: In future phases, adding workspace permissions, user-to-project sharing, credits, invoicing, and node-level comment threads maps directly to SQL join tables (e.g. `comments`, `transactions`, `user_permissions`).
-
-### Database Schema (Prisma ORM)
-
-The database schema is structured as follows:
-
-- **User**: Stores basic Clerk profile mappings (`id` matches the Clerk `userId`).
-- **Project**: Represents a design project workspace containing multiple generations.
-- **Generation**: The core entity. Uses a self-referential `parentId` foreign key pointing back to `Generation` to form the branching version history. It stores prompt details, preset selections, coordinates (`x`, `y`), and status ("pending", "completed").
-
----
-
-## 2. Express Backend Architecture (`/backend`)
-
-The backend is built using Node.js, Express, and TypeScript, following a clean layer structure:
+### Directory Structure
 
 ```
 backend/
 ├── prisma/
-│   └── schema.prisma       # Database models & relationships
+│   ├── schema.prisma           # Prisma models & DB configuration
+│   └── migrations/             # SQL migration files
 ├── src/
-│   ├── config/             # Third-party configurations (db, cloudinary)
-│   ├── controllers/        # Express request handlers & validation
-│   ├── middleware/         # Auth, cors, and centralized error handling
-│   ├── routes/             # Endpoint routing & Zod validation
-│   ├── app.ts              # Express app initialization
-│   └── server.ts           # Bootstrapper verifying db connection
+│   ├── config/                 # DB (Prisma), Cloudinary, & env configurations
+│   ├── controllers/            # Controller handlers (generation, project, editor, upload, drag)
+│   ├── middleware/             # Auth middleware (Clerk verification, user sync), CORS, logger
+│   ├── routes/                 # Express route definitions
+│   ├── app.ts                  # App initialization & middleware mounting
+│   └── server.ts               # Bootstrapper verifying DB & listening on PORT
 ```
 
-### Key Integrations:
-- **Clerk JWT Verification**: Authenticated routes use the `@clerk/express` middleware to verify Bearer tokens. A custom synchronization middleware intercepts verified requests, automatically registering or updating the user's profile in the PostgreSQL database.
-- **Cloudinary Stream Uploads**: Multiprocess files uploaded through `/api/uploads` are stored in memory using `multer` and streamed directly to Cloudinary. This ensures the backend remains stateless, secure, and ready for serverless scaling.
-- **Mock AI Pipeline**: The generation endpoint creates a `pending` generation, sleeps for 2 seconds to simulate GPU inference latency, updates the status to `completed` with a preset-matching Unsplash layout URL, and returns the finished node.
+### Core API Endpoints
+
+#### Projects Router (`/api/projects`)
+- `GET /api/projects`: List all projects for the authenticated user.
+- `POST /api/projects`: Create a new project workspace.
+- `GET /api/projects/:id`: Get detailed project data along with all generation nodes.
+- `DELETE /api/projects/:id`: Delete a project and cascade delete all associated generations.
+
+#### Generations Router (`/api/generations`)
+- `POST /api/generations`: Create a new AI generation (root base image or branched node).
+- `GET /api/generations/:generationId`: Fetch details for a specific generation.
+- `POST /api/generations/:generationId/depth`: Trigger depth map estimation for 3D viewing.
+- `DELETE /api/generations/:generationId`: Delete a generation node and remove its branch dependencies.
+
+#### Upload Router (`/api/uploads`)
+- `POST /api/uploads`: Accept image upload via `multipart/form-data`, stream buffer directly to Cloudinary, and return the secure Cloudinary image URL.
+
+#### Drag & Canvas Sync Router (`/api/drag`)
+- `PATCH /api/drag/nodes`: Batch update canvas coordinates (`x`, `y`) for version nodes on the canvas.
+
+#### Health Probes (`/api/health`, `/api/ready`)
+- `GET /api/health`: Lightweight HTTP health check for AWS ALB target groups.
+- `GET /api/ready`: Deep health check verifying PostgreSQL database and AWS ElastiCache Redis connectivity.
 
 ---
 
-## 3. Frontend Architecture Refactoring (`/src`)
+## 6. Frontend Architecture & UI Design System
 
-The frontend has been refactored into a **4-Layer Architecture**:
+### 4-Layer Frontend Architecture
 
-1. **API Client Layer (`src/api/`)**: Houses raw, type-safe API requests (using vanilla `fetch`). Automatically attaches the Clerk session token to all HTTP `Authorization` headers.
-2. **Service Layer (`src/services/`)**: Implements business services wrapping API operations, keeping API schemas separated from UI components.
-3. **Hooks Layer (`src/hooks/`)**: Implements custom hooks utilizing **TanStack Query (React Query)** to handle query cache keys, mutations, status states (loading, error), and reactive cache invalidation (e.g., refetching the tree when a generation completes).
-4. **View Layer (`src/pages/`, `src/components/`)**: Clean components that consume hooks, fully separated from direct fetch operations.
+```
+frontend/src/
+├── api/          # Layer 1: Pure type-safe HTTP fetch clients with Clerk Auth tokens
+├── services/     # Layer 2: Business services transforming API payloads
+├── hooks/        # Layer 3: TanStack React Query hooks managing caching & reactivity
+├── pages/        # Layer 4a: Top-level route pages (Landing, Projects, Studio, Editor, 3D)
+└── components/   # Layer 4b: Reusable UI components & canvas overlays
+```
 
-### Key Refactor Updates:
-- **Project-Aware Studio Page (`/project/:projectId`)**: StudioPage is fully dynamic. It loads project details, fetches version tree coordinates, and adapts based on the active path parameter.
-- **Empty Project State**: If a project has no versions, the workspace displays a premium glassmorphic drag-and-drop card prompting the user to upload their first base room photo. This uploads to Cloudinary and generates the original base node (`v1`) automatically.
-- **Dynamic Branching**: When clicking a node, a `v-placeholder` child is dynamically computed and attached to it on the canvas, allowing the user to branch a new design from any past iteration.
+### Pages & Routes
+1. **Landing Page (`/`)**: Public landing page showcasing product features.
+2. **Projects Page (`/projects`)**: Protected dashboard listing user workspaces.
+3. **Studio Workspace Page (`/project/:projectId`)**: Core dynamic workspace containing the interactive Version Tree canvas, prompt controller drawer, and preview modals.
+4. **Editor Page (`/editor/:versionId`)**: Canvas image masking & region editing interface.
+5. **3D Depth Viewer (`/project/:projectId/generation/:generationId/3d`)**: Three.js spatial depth mesh renderer.
 
 ---
 
-## 4. How to Run Locally
+## 7. Security, Authentication & Cloudinary Media Engine
+
+### Authentication Flow
+1. **Clerk Integration**: React frontend wraps root with `<ClerkProvider>` and fetches session tokens using `useAuth().getToken()`.
+2. **Bearer Token Transmission**: `fetchWithAuth` client automatically injects `Authorization: Bearer <token>` on all API calls.
+3. **Backend Middleware Chain**:
+   - `clerkMiddleware()`: Validates token signature against Clerk's public key set.
+   - `syncUser()`: Intercepts authenticated requests and syncs `req.currentUser` into the PostgreSQL `User` table.
+
+### Cloudinary Media Engine (No S3 Bucket Required)
+- **Direct Stream Uploads**: All room photographs uploaded by users are processed in memory using Multer (`multer.memoryStorage()`) and streamed straight to **Cloudinary** via stream pipes.
+- **Global CDN Delivery**: Cloudinary handles image hosting, format optimization (WebP/AVIF), dynamic scaling, and global CDN caching.
+- **Zero Local Disk / S3 Dependency**: Eliminates the overhead of managing S3 buckets, CORS policies, or local static file serving.
+
+---
+
+## 8. AWS Cloud Deployment Architecture
+
+The production backend infrastructure is hosted on Amazon Web Services (AWS) using containerized micro-services and managed Redis.
+
+```mermaid
+graph LR
+    ALB["AWS Application Load Balancer"] --> ECS["AWS ECS Fargate Tasks"]
+
+    subgraph AWSCloud["AWS Cloud Infrastructure"]
+        ECR["AWS Elastic Container Registry"]
+        ECS["AWS ECS Fargate Cluster"]
+        ElastiCache[("AWS ElastiCache for Redis")]
+    end
+
+    ECS -.->|"Fetch Assets"| ExternalCloudinary["Cloudinary CDN"]
+    ECS -.->|"Database Queries"| ExternalDB[("PostgreSQL Database")]
+    
+    ECR -.->|"Pull Container Image"| ECS
+    ECS --> ElastiCache
+```
+
+### AWS Infrastructure Services
+
+#### 1. AWS ECR (Elastic Container Registry)
+- Private container repository storing production Docker images built from `/backend/Dockerfile`.
+- Integrated image vulnerability scanning on push.
+
+#### 2. AWS ECS (Elastic Container Service) on Fargate
+- Serverless container execution for backend Express API tasks and async BullMQ queue workers.
+- Eliminates EC2 server management while providing auto-scaling across multiple Availability Zones.
+
+#### 3. AWS ElastiCache for Redis
+- Fully managed Redis cluster powering backend state caching and **BullMQ** async job queues.
+- Secured within private subnets and accessible exclusively by ECS container tasks.
+
+#### 4. AWS Application Load Balancer (ALB)
+- Distributes incoming HTTPS traffic across ECS task containers.
+- Conducts automated health monitoring via `/api/health`.
+
+---
+
+## 9. AI Services & External Repositories
+
+InteriorAI Studio connects to dedicated AI model micro-services and inference pipelines for specialized generation, image editing, and depth estimation tasks.
+
+### Connected AI Model Repositories & Services
+
+| AI Service / Capability | Description & Model Architecture | Repository / Service Target |
+| :--- | :--- | :--- |
+| **Room Restyle & Furnishing Pipeline** | ControlNet / Stable Diffusion micro-service taking input room photos, prompt parameters, and design presets to generate photorealistic interior variations. | [InteriorAI Generation Backend Repository](https://github.com/Prathamesh-Hingol/IITISOC-InteriorAI-Studio) |
+| **3D Depth Estimation Service** | Monocular depth map estimation (MiDaS / Depth Anything / ZoeDepth) generating 16-bit depth textures for interactive Three.js 3D room rendering. | [InteriorAI Depth Estimation Micro-Service](https://github.com/Prathamesh-Hingol/IITISOC-InteriorAI-Studio) |
+| **Inpainting & Region Mask Editor** | Mask-guided Stable Diffusion Inpainting service for region-level furniture editing and targeted room redesign. | [InteriorAI Inpainting & Mask Pipeline](https://github.com/Prathamesh-Hingol/IITISOC-InteriorAI-Studio) |
+
+---
+
+## 10. Local Development & Setup Guide
 
 ### Prerequisites
-- Node.js (v18+)
-- A running PostgreSQL database instance
-- A Clerk account
-- A Cloudinary account
+- Node.js (v18+) & `npm`
+- PostgreSQL database (Local or Cloud instance)
+- Redis server (Local or Docker container)
+- Clerk account credentials
+- Cloudinary account credentials
 
-### Step 1: Clone and Configure Environment
+### Environment Setup
 
-1. Copy the backend template env:
+#### 1. Backend Configuration (`backend/.env`)
+```env
+PORT=5000
+DATABASE_URL="postgresql://user:password@localhost:5432/interiorai?schema=public"
+CLERK_SECRET_KEY=sk_test_...
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+REDIS_URL="redis://localhost:6379"
+```
+
+#### 2. Frontend Configuration (`.env` in root)
+```env
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+VITE_API_BASE_URL=http://localhost:5000/api
+```
+
+### Installation Steps
+
+1. **Clone the Repository & Install Root Dependencies**:
    ```bash
-   cp backend/.env.example backend/.env
-   ```
-   Fill in your `DATABASE_URL`, `CLERK_SECRET_KEY`, and `CLOUDINARY_` secrets.
-
-2. Create a frontend env file (`.env` in root):
-   ```
-   VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
-   VITE_API_BASE_URL=http://localhost:5000/api
+   npm install
    ```
 
-### Step 2: Start the Backend
-
-1. Navigate to `/backend` and install dependencies:
+2. **Install & Setup Backend**:
    ```bash
    cd backend
    npm install
-   ```
-2. Generate Prisma Client and apply migrations:
-   ```bash
    npx prisma generate
-   # Run this once your PostgreSQL connection string is set:
    npx prisma db push
    ```
-3. Spin up the dev server:
+
+3. **Run Backend Development Server**:
    ```bash
    npm run dev
    ```
-   The API will listen on [http://localhost:5000](http://localhost:5000).
+   *Backend listens on [http://localhost:5000](http://localhost:5000)*
 
-### Step 3: Start the Frontend
-
-1. Navigate back to the root directory and install dependencies:
+4. **Run Frontend Development Server**:
    ```bash
-   cd ..
-   npm install
-   ```
-2. Spin up the Vite dev server:
-   ```bash
+   # From root directory
    npm run dev
    ```
-   The client will open on [http://localhost:5173](http://localhost:5173).
-
----
-
-## 5. Run the backend with Docker
-
-Docker starts PostgreSQL, Redis, database migrations, and the API. You only
-need Docker Desktop and your Clerk and Cloudinary credentials.
-
-1. Create the backend environment file:
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-   Fill in the Clerk and Cloudinary values. The supplied database settings work
-   for local Docker use; change `POSTGRES_PASSWORD` before deployment.
-2. Start the stack:
-   ```bash
-   cd backend
-   docker compose up --build
-   ```
-3. Open [http://localhost:5000/health](http://localhost:5000/health). Stop it
-   with `Ctrl+C`, or run `docker compose down` in another terminal.
-
-Database and Redis data are kept in Docker volumes, so they survive a normal
-`docker compose down`. To intentionally reset local data, run
-`docker compose down --volumes`.
-
-### Load testing with k6
-
-Start the Docker stack first, then run the health-route test. It defaults to 10
-virtual users for 30 seconds and asserts fewer than 1% failed
-requests with a 95th-percentile latency below 500 ms.
-
-```bash
-k6 run backend/load-tests/health.js
-```
-
-If k6 is not installed locally, run it in Docker instead:
-
-```bash
-docker run --rm --network backend_default -e BASE_URL=http://backend:5000 -v "$PWD/backend/load-tests:/scripts:ro" grafana/k6 run /scripts/health.js
-```
-
-Increase load only after a smoke test succeeds:
-
-```bash
-k6 run -e VUS=50 -e DURATION=2m backend/load-tests/health.js
-```
-
-Set `BASE_URL` to load test a deployed environment, for example
-`-e BASE_URL=https://api.example.com`. The default endpoint is `/api/health`,
-which is safe from the API rate limiter. To measure database and Redis
-readiness as well, use `-e ENDPOINT=/api/ready`; this intentionally adds a
-database query and Redis ping to every request.
+   *Frontend opens on [http://localhost:5173](http://localhost:5173)*

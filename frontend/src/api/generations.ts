@@ -1,9 +1,6 @@
 import { fetchWithAuth } from "./client";
 import type { DepthAssets } from "../types";
 
-export interface ViewResult {
-  output_url: string;
-}
 
 export interface CreateGenerationPayload {
   projectId: string;
@@ -34,13 +31,4 @@ export const generationsApi = {
       method: "POST",
     }),
 
-  createView: (
-    generationId: string,
-    angle: string,
-    getToken: () => Promise<string | null>,
-  ) =>
-    fetchWithAuth<ViewResult>(`/generations/${generationId}/views`, getToken, {
-      method: "POST",
-      body: { angle },
-    }),
 };

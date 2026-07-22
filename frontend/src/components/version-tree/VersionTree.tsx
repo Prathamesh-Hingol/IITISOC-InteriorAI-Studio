@@ -1,4 +1,4 @@
-import { Box, Download, Eye, Trash2, ImagePlus, Camera, Loader2, AlertCircle } from "lucide-react";
+import { Box, Download, Eye, Trash2, ImagePlus, Loader2, AlertCircle } from "lucide-react";
 import type { VersionNode, VersionEdge } from "../../types";
 
 interface VersionTreeProps {
@@ -9,7 +9,6 @@ interface VersionTreeProps {
 	onDeleteNode?: (id: string) => void;
 	onPreviewNode?: (node: VersionNode) => void;
 	onView3D?: (node: VersionNode) => void;
-	onMultiView?: (node: VersionNode) => void;
 }
 
 export function VersionTree({
@@ -20,10 +19,9 @@ export function VersionTree({
 	onPreviewNode,
 	onDeleteNode,
 	onView3D,
-	onMultiView,
 }: VersionTreeProps) {
 	const cardWidth = 200;
-	const cardHeight = 135;
+	const cardHeight = 140;
 
 	const handleDownload = async (imageUrl: string, title: string) => {
 		try {
@@ -46,6 +44,10 @@ export function VersionTree({
 		}
 	};
 
+	const rootNode = nodes.find((n) => !n.parentId);
+	const rootX = rootNode?.x ?? 400;
+	const rootY = rootNode?.y ?? 350;
+
 	return (
 		<div className="absolute inset-0 pointer-events-none">
 			{/* SVG Connections Layer */}
@@ -58,58 +60,19 @@ export function VersionTree({
 					</linearGradient>
 				</defs>
 
-				{/* 1. Historical dotted line stretching from the left to V1 */}
+				{/* Historical dotted line stretching from left to root node */}
 				<line
-					x1={200}
-					y1={415} // Center left of V1 (V1 is at x: 400, y: 350)
-					x2={400}
-					y2={415}
+					x1={rootX - 200}
+					y1={rootY + cardHeight / 2}
+					x2={rootX}
+					y2={rootY + cardHeight / 2}
 					stroke="#c0c8c5"
 					strokeWidth="1.5"
 					strokeDasharray="4,4"
 				/>
 
-				{/* 2. Custom Junction Split Connections for V1, V2, and Placeholder */}
-				{/* Main horizontal output from V1 (right-edge is 600, right-center Y is 417) */}
-				{/* <line
-          x1={600}
-          y1={417}
-          x2={640}
-          y2={417}
-          stroke="#00362d"
-          strokeWidth="2"
-        /> */}
-
-				{/* Diagonal up to V2 (left-edge is 750, left-center Y is 297) */}
-				{/* <line
-          x1={640}
-          y1={417}
-          x2={750}
-          y2={297}
-          stroke="#00362d"
-          strokeWidth="2"
-        /> */}
-
-				{/* Diagonal down to Placeholder (left-edge is 750, left-center Y is 537) */}
-				{/* <line
-          x1={640}
-          y1={417}
-          x2={750}
-          y2={537}
-          stroke="#c0c8c5"
-          strokeWidth="2"
-        /> */}
-
-				{/* 3. Render connections for any dynamically added nodes */}
+				{/* Render dynamic connections between tree nodes */}
 				{edges.map((edge) => {
-					// Skip the static connections that are custom drawn above
-					if (
-						(edge.source === "v1" && edge.target === "v2") ||
-						(edge.source === "v1" && edge.target === "v-placeholder")
-					) {
-						return null;
-					}
-
 					const sourceNode = nodes.find((n) => n.id === edge.source);
 					const targetNode = nodes.find((n) => n.id === edge.target);
 
@@ -120,9 +83,10 @@ export function VersionTree({
 					const tX = targetNode.x || 0;
 					const tY = (targetNode.y || 0) + cardHeight / 2;
 
-					const cpX1 = sX + 100;
+					const dx = Math.abs(tX - sX) / 2;
+					const cpX1 = sX + dx;
 					const cpY1 = sY;
-					const cpX2 = tX - 100;
+					const cpX2 = tX - dx;
 					const cpY2 = tY;
 
 					const isActiveConnection = selectedNodeId === targetNode.id;
@@ -244,16 +208,7 @@ export function VersionTree({
 										>
 											<Box size={13} />
 										</button>
-										<button
-											onClick={(e) => {
-												e.stopPropagation();
-												onMultiView?.(node);
-											}}
-											className="p-2 cursor-pointer bg-white/95 hover:bg-white text-on-surface hover:text-primary rounded-full transition-all shadow-sm hover:scale-110"
-											title="Multi-View"
-										>
-											<Camera size={13} />
-										</button>
+
 										<button
 											onClick={(e) => {
 												e.stopPropagation();

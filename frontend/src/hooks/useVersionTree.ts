@@ -25,7 +25,7 @@ export function useVersionTree(generations: any[]) {
 
   // Automatically select the active or base node when generations first load
   useEffect(() => {
-    if (generations.length > 0) {
+    if (generations && generations.length > 0) {
       const exists = generations.some((g) => g.id === selectedNodeId);
       if (!selectedNodeId || !exists) {
         // Find root node (parentId is null/undefined)
@@ -54,13 +54,9 @@ export function useVersionTree(generations: any[]) {
     }
 
     // Locate the root node
-    const root = generations.find((g) => !g.parentId);
-    if (!root) {
-      // fallback to the first generation if no clear root
-      return { nodes: nodesList, edges: edgesList };
-    }
+    const root = generations.find((g) => !g.parentId) || generations[0];
 
-    // Map parentId to children list
+    // Map parentId to children list for generation objects
     const childrenMap: Record<string, any[]> = {};
     generations.forEach((gen) => {
       if (gen.parentId) {
@@ -71,72 +67,116 @@ export function useVersionTree(generations: any[]) {
       }
     });
 
-    // Recursive positioning function
-    function positionNode(node: any, x: number, y: number) {
-      nodesList.push({
-        id: node.id,
-        type: node.id === selectedNodeId ? "active" : (!node.parentId ? "original" : "generated"),
-        title: node.title,
-        image: node.imageUrl,
-        parentId: node.parentId || undefined,
-        createdAt: formatTime(node.createdAt) + (node.creativityStrength !== 0 && node.creativityStrength !== undefined ? ` • ${node.creativityStrength}% strength` : ""),
-        x,
-        y,
-        prompt: node.prompt || undefined,
-        preset: node.preset || undefined,
-        creativityStrength: node.creativityStrength || undefined,
-        generationMode: node.generationMode || undefined,
-        status: node.status, // raw DB value: "queued" | "processing" | "failed" | "completed"
-      });
-
-      const children = childrenMap[node.id] || [];
-      const count = children.length;
-      children.forEach((child, index) => {
-        edgesList.push({
-          id: `e-${node.id}-${child.id}`,
-          source: node.id,
-          target: child.id,
-        });
-
-        const childX = x + 350;
-        // Symmetric vertical spacing centered on parent Y
-        const offsetY = count === 1 ? 0 : -((count - 1) * 120) + (index * 240);
-        positionNode(child, childX, y + offsetY);
-      });
-    }
-
-    // Layout tree starting from root at coordinates (400, 350)
-    positionNode(root, 400, 350);
-
-    // Add the UI-only "v-placeholder" node under the selected node (if completed)
+    // Check if placeholder node ("New Variation") should be added under selected node
     let placeholderParentId = root.id;
     if (selectedNodeId && generations.some((g) => g.id === selectedNodeId)) {
       placeholderParentId = selectedNodeId;
     }
+    const selectedGen = generations.find((g) => g.id === placeholderParentId);
+    const hasPlaceholder = selectedGen && selectedGen.status === "completed";
 
-    const parentNodeObj = nodesList.find((n) => n.id === placeholderParentId);
-    // A new variation can only branch from a completed image, not a queued job.
-    if (parentNodeObj && parentNodeObj.status === "completed") {
-      const pX = parentNodeObj.x! + 350;
-      const existingChildren = childrenMap[placeholderParentId] || [];
-      const pY = parentNodeObj.y! - (existingChildren.length * 100) + (existingChildren.length * 240);
+    const placeholderNode: VersionNode = {
+      id: "v-placeholder",
+      type: "placeholder",
+      title: "New Variation",
+      parentId: placeholderParentId,
+      createdAt: `From ${selectedGen?.title?.split(":")[0] || "Base"} Base`,
+    };
 
-      nodesList.push({
-        id: "v-placeholder",
-        type: "placeholder",
-        title: "New Variation",
-        parentId: placeholderParentId,
-        createdAt: `From ${parentNodeObj.title.split(":")[0]} Base`,
-        x: pX,
-        y: pY,
+    // Build unified map of node metadata
+    const nodeDataMap = new Map<string, VersionNode>();
+    generations.forEach((gen) => {
+      nodeDataMap.set(gen.id, {
+        id: gen.id,
+        type: gen.id === selectedNodeId ? "active" : (!gen.parentId ? "original" : "generated"),
+        title: gen.title,
+        image: gen.imageUrl,
+        parentId: gen.parentId || undefined,
+        createdAt: formatTime(gen.createdAt) + (gen.creativityStrength !== 0 && gen.creativityStrength !== undefined ? ` • ${gen.creativityStrength}% strength` : ""),
+        prompt: gen.prompt || undefined,
+        preset: gen.preset || undefined,
+        creativityStrength: gen.creativityStrength || undefined,
+        generationMode: gen.generationMode || undefined,
+        status: gen.status,
       });
+    });
 
-      edgesList.push({
-        id: `e-${placeholderParentId}-placeholder`,
-        source: placeholderParentId,
-        target: "v-placeholder",
-      });
+    if (hasPlaceholder) {
+      nodeDataMap.set(placeholderNode.id, placeholderNode);
     }
+
+    // Build unified children ID list mapping (including placeholder if active)
+    const fullChildrenMap = new Map<string, string[]>();
+    generations.forEach((gen) => {
+      const childIds = (childrenMap[gen.id] || []).map((c) => c.id);
+      fullChildrenMap.set(gen.id, childIds);
+    });
+
+    if (hasPlaceholder) {
+      const parentChildren = fullChildrenMap.get(placeholderParentId) || [];
+      fullChildrenMap.set(placeholderParentId, [...parentChildren, placeholderNode.id]);
+    }
+
+    // ── Post-Order Leaf-Spacing Tree Layout Algorithm ──
+    const X_STEP = 350;      // Horizontal spacing between depth columns
+    const ROW_HEIGHT = 195;  // Vertical clearance per leaf node (card height 140 + ~55px gap)
+    const TARGET_ROOT_X = 400;
+    const TARGET_ROOT_Y = 350;
+
+    let currentY = 0;
+    const nodeCoords = new Map<string, { x: number; y: number }>();
+
+    function calculateSubtreeLayout(nodeId: string, depth: number): number {
+      const x = TARGET_ROOT_X + depth * X_STEP;
+      const childrenIds = fullChildrenMap.get(nodeId) || [];
+
+      if (childrenIds.length === 0) {
+        // Leaf node: allocate next vertical slot
+        const y = currentY;
+        currentY += ROW_HEIGHT;
+        nodeCoords.set(nodeId, { x, y });
+        return y;
+      }
+
+      // Internal node: process children first, then center parent between them
+      const childYs: number[] = [];
+      childrenIds.forEach((childId) => {
+        edgesList.push({
+          id: `e-${nodeId}-${childId}`,
+          source: nodeId,
+          target: childId,
+        });
+
+        const childY = calculateSubtreeLayout(childId, depth + 1);
+        childYs.push(childY);
+      });
+
+      const firstChildY = childYs[0];
+      const lastChildY = childYs[childYs.length - 1];
+      const y = (firstChildY + lastChildY) / 2;
+
+      nodeCoords.set(nodeId, { x, y });
+      return y;
+    }
+
+    // Compute raw tree layout starting from root
+    calculateSubtreeLayout(root.id, 0);
+
+    // Shift entire tree vertically so root sits at TARGET_ROOT_Y
+    const rootCoord = nodeCoords.get(root.id);
+    const yShift = rootCoord ? TARGET_ROOT_Y - rootCoord.y : 0;
+
+    // Assemble final nodes list with shifted coordinates
+    nodeDataMap.forEach((nodeObj, id) => {
+      const coord = nodeCoords.get(id);
+      if (coord) {
+        nodesList.push({
+          ...nodeObj,
+          x: coord.x,
+          y: coord.y + yShift,
+        });
+      }
+    });
 
     return { nodes: nodesList, edges: edgesList };
   }, [generations, selectedNodeId]);
