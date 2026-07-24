@@ -16,15 +16,19 @@ const segmentRequestSchema = z.object({
 	versionId: z.string().uuid("Invalid version ID"),
 	x: z.number(),
 	y: z.number(),
+	reference_mask: z.boolean().optional().default(false),
+	referenceUrl: z.string().url("Invalid reference URL").optional().nullable(),
 });
 
 const acceptCandidateRequestSchema = z.object({
 	versionId: z.string().uuid("Invalid version ID"),
 	maskIndex: z.number().int().nonnegative(),
+	reference_mask: z.boolean().optional().default(false),
 });
 
 const actionRequestSchema = z.object({
 	versionId: z.string().uuid("Invalid version ID"),
+	reference_mask: z.boolean().optional().default(false),
 });
 
 const removeClicksRequestSchema = z.object({
@@ -32,17 +36,15 @@ const removeClicksRequestSchema = z.object({
 	clickIndices: z
 		.array(z.number().int().nonnegative())
 		.min(1, "At least one click index is required"),
+	reference_mask: z.boolean().optional().default(false),
 });
 
 const generateRequestSchema = z.object({
 	versionId: z.string().uuid("Invalid version ID"),
 	prompt: z.string().min(1, "Prompt is required"),
-	combinedMask: z.string().url("Invalid mask URL"),
-	furnitureReference: z
-		.string()
-		.url("Invalid furniture reference URL")
-		.optional()
-		.nullable(),
+	combinedMask: z.string().min(1, "Combined mask is required"),
+	furnitureReference: z.string().optional().nullable(),
+	referenceMask: z.string().optional().nullable(),
 	mode: z.enum(["interior-modification", "furniture-placement"]),
 });
 
@@ -58,6 +60,7 @@ interface candidateRes {
 }
 interface SAMSegmentResponse {
 	session_id:string,
+	click_index:number,
 	candidates:candidateRes[]
 }
 
@@ -162,24 +165,29 @@ export async function segment(req: Request, res: Response, next: NextFunction) {
 				.status(404)
 				.json({ error: "Version not found or unauthorized" });
 		}
-		console.log(generation.imageUrl);
+		const isRef = validated.reference_mask ?? false;
+		const targetImageUrl = isRef && validated.referenceUrl ? validated.referenceUrl : generation.imageUrl;
+		const targetSessionId =validated.versionId;
+
+		console.log(`[Segment] Target Image: ${targetImageUrl}, RefMask: ${isRef}, Session: ${targetSessionId}`);
 		console.log(`x:${validated.x},y:${validated.y}`);
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
 			try {
 				console.log(
-					`[SAM-Segment] Forwarding click (${validated.x}, ${validated.y}) to SAM microservice`,
+					`[SAM-Segment] Forwarding click (${validated.x}, ${validated.y}) to SAM microservice (Ref: ${isRef})`,
 				);
 				const samResponse: AxiosResponse<SAMSegmentResponse> =
 					await axios.post<SAMSegmentResponse>(
 						`${samEndpoint}/segment/click`,
 						{
-							image_url: generation.imageUrl,
-							session_id: validated.versionId,
+							image_url: targetImageUrl,
+							session_id: targetSessionId,
 							cx: validated.x,
 							cy: validated.y,
 							max_dem:1024,
+							reference_mask:isRef,
 						},
 						{
 							headers: { "Content-Type": "application/json" },
@@ -200,7 +208,7 @@ export async function segment(req: Request, res: Response, next: NextFunction) {
 		// ── Mock Fallback ──
 		// Generate 3 candidate circles of different sizes around the click point
 		const { x, y } = validated;
-		const session = getOrCreateMockSession(validated.versionId);
+		const session = getOrCreateMockSession(targetSessionId);
 
 		// Store 3 candidate sizes: small (35px), medium (75px), large (130px)
 		session.lastCandidates = [
@@ -244,19 +252,22 @@ export async function acceptCandidate(
 			return res.status(401).json({ error: "Unauthorized" });
 		}
 
+		const isRef = validated.reference_mask ?? false;
+		const targetSessionId =validated.versionId;
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
 			try {
 				console.log(
-					`[SAM-Accept] Accepting candidate ${validated.maskIndex} in SAM`,
+					`[SAM-Accept] Accepting candidate ${validated.maskIndex} in SAM (Ref: ${isRef})`,
 				);
 				const samResponse: AxiosResponse<SAMAcceptResponse> =
 					await axios.post<SAMAcceptResponse>(
 						`${samEndpoint}/segment/choose`,
 						{
-							session_id: validated.versionId,
+							session_id: targetSessionId,
 							candidate_index: validated.maskIndex,
+							reference_mask:isRef,
 						},
 						{
 							headers: { "Content-Type": "application/json" },
@@ -276,7 +287,7 @@ export async function acceptCandidate(
 		}
 
 		// ── Mock Fallback ──
-		const session = getOrCreateMockSession(validated.versionId);
+		const session = getOrCreateMockSession(targetSessionId);
 		const selected = session.lastCandidates[validated.maskIndex];
 
 		if (selected) {
@@ -324,19 +335,22 @@ export async function removeClicks(
 			return res.status(401).json({ error: "Unauthorized" });
 		}
 
+		const isRef = validated.reference_mask ?? false;
+		const targetSessionId =validated.versionId;
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
 			try {
 				console.log(
-					`[SAM-RemoveClicks] Forwarding click_indices [${validated.clickIndices.join(", ")}] to SAM`,
+					`[SAM-RemoveClicks] Forwarding click_indices [${validated.clickIndices.join(", ")}] to SAM (Ref: ${isRef})`,
 				);
 				const samResponse: AxiosResponse<SAMRemoveClicksResponse> =
 					await axios.post<SAMRemoveClicksResponse>(
 						`${samEndpoint}/segment/remove`,
 						{
-							session_id: validated.versionId,
+							session_id: targetSessionId,
 							click_indices: validated.clickIndices,
+							reference_mask:isRef,
 						},
 						{ headers: { "Content-Type": "application/json" } },
 					);
@@ -358,7 +372,7 @@ export async function removeClicks(
 
 		// ── Mock Fallback ──
 		// Nullify the specified slots so original indices are preserved.
-		const session = getOrCreateMockSession(validated.versionId);
+		const session = getOrCreateMockSession(targetSessionId);
 		for (const idx of validated.clickIndices) {
 			if (idx < session.history.length) {
 				session.history[idx] = null;
@@ -410,14 +424,16 @@ export async function clearSelection(
 			return res.status(401).json({ error: "Unauthorized" });
 		}
 
+		const isRef = validated.reference_mask ?? false;
+		const targetSessionId =validated.versionId;
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
 			try {
-				console.log(`[SAM-Clear] Requesting session clear from SAM`);
+				console.log(`[SAM-Clear] Requesting session clear from SAM (Ref: ${isRef})`);
 				await axios.post(
 					`${samEndpoint}/segment/clear`,
-					{ session_id: validated.versionId },
+					{ session_id: targetSessionId,reference_mask:isRef, },
 					{ headers: { "Content-Type": "application/json" }},
 				);
 			} catch (samError: any) {
@@ -426,7 +442,7 @@ export async function clearSelection(
 		}
 
 		// ── Mock Fallback ──
-		const session = getOrCreateMockSession(validated.versionId);
+		const session = getOrCreateMockSession(targetSessionId);
 		session.history = [];
 		session.lastCandidates = [];
 		session.combinedMaskUrl = null;
@@ -482,8 +498,8 @@ export async function generate(
 			image_url: parentNode.imageUrl,
 			mask_url: validated.combinedMask,
 			reference_image_url: validated.furnitureReference || null,
+			reference_mask_url: validated.referenceMask || null,
 			edit_mode: validated.mode,
-			guidance: 8,
 		});
 
 		// Create a pending generation in DB
@@ -529,10 +545,12 @@ export async function generate(
 		});
 	} catch (error) {
 		if (error instanceof z.ZodError) {
+			console.error("[Generate API Error] Validation Failed:", JSON.stringify(error.errors, null, 2));
 			return res
 				.status(400)
 				.json({ error: "Validation failed", details: error.errors });
 		}
+		console.error("[Generate API Error] Request failed:", error);
 		next(error);
 	}
 }

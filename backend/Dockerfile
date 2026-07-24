@@ -1,36 +1,54 @@
-# syntax=docker/dockerfile:1
+# ─── Stage 1: Build TypeScript & Prisma ─────────────────────
+FROM node:20-alpine AS builder
 
-FROM node:20-bookworm-slim AS dependencies
 WORKDIR /app
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl \
-  && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json ./
+
+# Copy dependency definitions
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY prisma ./prisma
+
+# Install all dependencies (including devDependencies for tsc)
 RUN npm ci
 
-FROM dependencies AS build
-ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
-ARG DIRECT_URL=postgresql://build:build@localhost:5432/build
-ENV DATABASE_URL=${DATABASE_URL}
-ENV DIRECT_URL=${DIRECT_URL}
-COPY tsconfig.json prisma.config.ts ./
-COPY prisma ./prisma
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Copy source code and build
 COPY src ./src
 RUN npm run build
 
-FROM node:20-bookworm-slim AS production
+# ─── Stage 2: Production API Server ──────────────────────────
+FROM node:20-alpine AS backend
+
 WORKDIR /app
-ENV NODE_ENV=production
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl \
-  && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
-USER node
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy generated Prisma client and built JS
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/dist ./dist
+
 EXPOSE 5000
-CMD ["node", "dist/server.js"]
+
+CMD ["npm", "run", "start"]
+
+# ─── Stage 3: BullMQ AI Worker ──────────────────────────────
+FROM node:20-alpine AS worker
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy generated Prisma client and built JS
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/dist ./dist
+
+CMD ["npm", "run", "worker"]

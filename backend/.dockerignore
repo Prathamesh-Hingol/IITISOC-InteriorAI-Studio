@@ -6,3 +6,6 @@ npm-debug.log
 .git
 coverage
 README.md
+.dockerignore
+docker-compose.yml
+REDIS.md

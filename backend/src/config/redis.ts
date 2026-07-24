@@ -1,7 +1,7 @@
 import Redis from "ioredis";
 
-const redisUrl = process.env.REDIS_URL ??
-  (process.env.NODE_ENV === "production" ? undefined : "redis://127.0.0.1:6379");
+const redisUrl = process.env.REDIS_URL
+  
 
 if (!redisUrl) {
   throw new Error("REDIS_URL is required when NODE_ENV is production");
