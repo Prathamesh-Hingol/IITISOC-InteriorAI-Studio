@@ -9,6 +9,8 @@ export interface Point {
 
 export type EditorMode = "interior-modification" | "furniture-placement" | "object-move";
 
+export type CanvasTarget = "base" | "reference";
+
 export interface SegmentExtractRequest {
   versionId: string;
 }
@@ -29,6 +31,8 @@ export interface SegmentRequest {
   versionId: string;
   x: number;
   y: number;
+  reference_mask?: boolean;
+  referenceUrl?: string | null;
 }
 
 /** A single candidate returned by the SAM /segment/click endpoint. */
@@ -45,6 +49,7 @@ export interface SegmentResponse {
 export interface AcceptCandidateRequest {
   versionId: string;
   maskIndex: number;
+  reference_mask?: boolean;
 }
 
 export interface AcceptCandidateResponse {
@@ -53,6 +58,7 @@ export interface AcceptCandidateResponse {
 
 export interface ActionRequest {
   versionId: string;
+  reference_mask?: boolean;
 }
 
 export interface ActionResponse {
@@ -62,6 +68,7 @@ export interface ActionResponse {
 export interface RemoveClicksRequest {
   versionId: string;
   clickIndices: number[];
+  reference_mask?: boolean;
 }
 
 export interface GenerateRequest {
@@ -69,6 +76,7 @@ export interface GenerateRequest {
   prompt: string;
   combinedMask: string;
   furnitureReference?: string | null;
+  referenceMask?: string | null;
   mode: EditorMode;
 }
 

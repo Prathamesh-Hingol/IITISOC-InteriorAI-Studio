@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { X, RefreshCw } from "lucide-react";
-import type { DragObjectMeta } from "../../types/drag";
+import type { SegmentExtractResponse } from "../../types/editor";
 
 interface DraggableObjectCanvasProps {
   backgroundUrl: string;
   cutoutUrl: string;
   depthUrl: string;
-  meta: DragObjectMeta;
+  meta: SegmentExtractResponse["meta"];
   autoScaleEnabled: boolean;
   onReset: () => void;
   isFullscreen?: boolean;

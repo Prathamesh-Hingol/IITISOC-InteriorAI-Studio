@@ -31,6 +31,7 @@ interface ImageCanvasProps {
   hoveredOverlayUrl: string | null;
   isSegmenting: boolean;
   onSelectPoint?: (point: Point) => void;
+  targetName?: string;
 }
 
 /**
@@ -46,6 +47,7 @@ export function ImageCanvas({
   hoveredOverlayUrl,
   isSegmenting,
   onSelectPoint,
+  targetName,
 }: ImageCanvasProps) {
   const [naturalDims, setNaturalDims] = useState<{
     width: number;
@@ -160,6 +162,13 @@ export function ImageCanvas({
         }`}
         style={{ width: displayW, height: displayH }}
       >
+        {targetName && (
+          <div className="absolute top-3 left-3 z-30 bg-black/70 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full shadow border border-white/20 pointer-events-none flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            {targetName}
+          </div>
+        )}
+
         {/* Layer 1: Room Image (base) */}
         <img
           src={imageUrl}

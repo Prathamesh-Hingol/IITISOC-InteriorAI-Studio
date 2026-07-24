@@ -5,7 +5,14 @@ import type { Point, SegmentCandidate } from "../types/editor";
 export function useSelection(
   versionId: string,
   getToken: () => Promise<string | null>,
+  options?: {
+    isReferenceMask?: boolean;
+    referenceUrl?: string | null;
+  }
 ) {
+  const isRef = options?.isReferenceMask ?? false;
+  const refUrl = options?.referenceUrl;
+
   const [candidateMasks, setCandidateMasks] = useState<SegmentCandidate[]>([]);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number | null>(null);
   const [combinedMask, setCombinedMask] = useState<string | null>(null);
@@ -46,6 +53,8 @@ export function useSelection(
             versionId,
             x: point.x,
             y: point.y,
+            reference_mask: isRef,
+            referenceUrl: refUrl,
           },
           getToken
         );
@@ -56,7 +65,7 @@ export function useSelection(
         setIsSegmenting(false);
       }
     },
-    [versionId, getToken, clearCandidates]
+    [versionId, getToken, clearCandidates, isRef, refUrl]
   );
 
   const handleAcceptCandidate = useCallback(
@@ -67,6 +76,7 @@ export function useSelection(
           {
             versionId,
             maskIndex,
+            reference_mask: isRef,
           },
           getToken
         );
@@ -81,7 +91,7 @@ export function useSelection(
         setIsSegmenting(false);
       }
     },
-    [versionId, getToken, clearCandidates, nextClickId]
+    [versionId, getToken, clearCandidates, nextClickId, isRef]
   );
 
   /** Toggle a click index in/out of the removal selection. */
@@ -97,7 +107,7 @@ export function useSelection(
     setIsSegmenting(true);
     try {
       const res = await EditorService.removeClicks(
-        { versionId, clickIndices: selectedClickIndices },
+        { versionId, clickIndices: selectedClickIndices, reference_mask: isRef },
         getToken
       );
       setCombinedMask(res.combinedMaskUrl);
@@ -118,12 +128,12 @@ export function useSelection(
     } finally {
       setIsSegmenting(false);
     }
-  }, [versionId, getToken, selectedClickIndices, clearCandidates]);
+  }, [versionId, getToken, selectedClickIndices, clearCandidates, isRef]);
 
   const handleClearSelection = useCallback(async () => {
     setIsSegmenting(true);
     try {
-      const res = await EditorService.clearSelection({ versionId }, getToken);
+      const res = await EditorService.clearSelection({ versionId, reference_mask: isRef }, getToken);
       setCombinedMask(res.combinedMaskUrl);
       setSelectionCount(0);
       setClickLabels([]);
@@ -135,7 +145,7 @@ export function useSelection(
     } finally {
       setIsSegmenting(false);
     }
-  }, [versionId, getToken, clearCandidates]);
+  }, [versionId, getToken, clearCandidates, isRef]);
 
 
   return {

@@ -8,13 +8,18 @@ import {
   Armchair,
   X,
   Move,
+  ArrowRight,
+  Image as ImageIcon,
 } from "lucide-react";
 import { FurnitureReferenceUpload } from "./FurnitureReferenceUpload";
-import type { EditorMode } from "../../types/editor";
+import type { CanvasTarget, EditorMode } from "../../types/editor";
 
 interface EditorSidebarProps {
   prompt: string;
   onPromptChange: (value: string) => void;
+  // --- Canvas Target ---
+  canvasTarget?: CanvasTarget;
+  onTargetChange?: (target: CanvasTarget) => void;
   // --- Segmentation props (furniture-placement and object-move modes) ---
   selectionCount: number;
   isSegmenting: boolean;
@@ -24,6 +29,10 @@ interface EditorSidebarProps {
   onToggleClickIndex: (index: number) => void;
   onRemoveClicks: () => void;
   onClearSelection: () => void;
+  baseMaskUrl?: string | null;
+  // --- Reference Image Segmentation ---
+  referenceMaskUrl?: string | null;
+  referenceSelectionCount?: number;
   // --- Generation callbacks ---
   onGenerate: () => void;       // furniture-placement: requires mask
   onModify: () => void;         // interior-modification: prompt-only
@@ -43,6 +52,8 @@ interface EditorSidebarProps {
 export function EditorSidebar({
   prompt,
   onPromptChange,
+  canvasTarget = "base",
+  onTargetChange,
   selectionCount,
   isSegmenting,
   isGenerating,
@@ -51,6 +62,9 @@ export function EditorSidebar({
   onToggleClickIndex,
   onRemoveClicks,
   onClearSelection,
+  baseMaskUrl = null,
+  referenceMaskUrl = null,
+  referenceSelectionCount = 0,
   onGenerate,
   onModify,
   onMove,
@@ -63,11 +77,21 @@ export function EditorSidebar({
   const isMoveMode = mode === "object-move";
   const isSegmentationMode = isFurnitureMode || isMoveMode;
 
-  // Furniture mode gate
+  // Active canvas selection status
   const hasSelection = selectionCount > 0;
+
+  // Base room selection (either active or saved in baseMaskUrl)
+  const hasBaseSelection = Boolean(baseMaskUrl) || (canvasTarget === "base" ? selectionCount > 0 : false);
+  const hasReference = Boolean(referenceUrl);
+  const hasRefSelection = Boolean(referenceMaskUrl) || (canvasTarget === "reference" ? selectionCount > 0 : referenceSelectionCount > 0);
   const hasPrompt = prompt.trim().length > 0;
   const canGenerate =
-    hasSelection && hasPrompt && !isGenerating && !isSegmenting && !isUploadingReference;
+    hasBaseSelection &&
+    (!hasReference || hasRefSelection) &&
+    hasPrompt &&
+    !isGenerating &&
+    !isSegmenting &&
+    !isUploadingReference;
   const hasSelectedForRemoval = selectedClickIndices.length > 0;
 
   // Interior-modification mode gate (prompt-only)
@@ -268,6 +292,32 @@ export function EditorSidebar({
                   isUploading={isUploadingReference}
                   onUpload={onReferenceUpload}
                 />
+
+                {/* Move to Reference Image action button */}
+                {referenceUrl && onTargetChange && (
+                  <div className="pt-1">
+                    {canvasTarget === "base" ? (
+                      <button
+                        type="button"
+                        onClick={() => onTargetChange("reference")}
+                        className="w-full py-2.5 px-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-primary/20"
+                      >
+                        <ImageIcon size={14} />
+                        <span>Move to Reference Image</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onTargetChange("base")}
+                        className="w-full py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-[#1b1c1c] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-gray-300"
+                      >
+                        <ImageIcon size={14} />
+                        <span>Switch to Base Room Image</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </>
@@ -300,12 +350,17 @@ export function EditorSidebar({
                 </>
               )}
             </button>
-            {!hasSelection && (
+            {!hasBaseSelection && (
               <p className="text-[10px] text-[#c0c8c5] text-center mt-2">
-                Highlight at least one region to begin
+                Highlight base room region to begin
               </p>
             )}
-            {hasSelection && !hasPrompt && (
+            {hasBaseSelection && hasReference && !hasRefSelection && (
+              <p className="text-[10px] text-amber-600 text-center mt-2 font-medium animate-pulse">
+                Reference photo uploaded: Segment reference furniture to place
+              </p>
+            )}
+            {hasBaseSelection && (!hasReference || hasRefSelection) && !hasPrompt && (
               <p className="text-[10px] text-amber-500 text-center mt-2 animate-pulse">
                 Enter design instructions to enable generation
               </p>

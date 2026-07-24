@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Box, Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye, XCircle } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
@@ -20,6 +20,8 @@ import type { VersionNode } from "../types";
 export function StudioPage() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const navigate = useNavigate();
+	const location = useLocation();
+	const navState = location.state as { selectNodeId?: string } | null;
 
 	const {
 		pan,
@@ -43,6 +45,13 @@ export function StudioPage() {
 
 	// Client-side Version Tree state & layout computation
 	const { nodes, edges, selectedNodeId, selectNode } = useVersionTree(generations);
+
+	// Auto-select queued generation node when returning from Editor page
+	useEffect(() => {
+		if (navState?.selectNodeId && generations.length > 0) {
+			selectNode(navState.selectNodeId);
+		}
+	}, [navState?.selectNodeId, generations, selectNode]);
 
 	// Fullscreen Preview Modal state
 	const [previewNode, setPreviewNode] = useState<VersionNode | null>(null);

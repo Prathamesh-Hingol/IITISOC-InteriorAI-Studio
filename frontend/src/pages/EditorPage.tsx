@@ -6,12 +6,13 @@ import { ArrowLeft, Loader2, AlertCircle, Move, X } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { ImageCanvas } from "../components/editor/ImageCanvas";
 import { EditorSidebar } from "../components/editor/EditorSidebar";
+import { EditorTimeline } from "../components/editor/EditorTimeline";
 import { MaskCandidatePanel } from "../components/editor/MaskCandidatePanel";
 import { useSelection } from "../hooks/useSelection";
 import { useEditor } from "../hooks/useEditor";
 import { EditorService } from "../services/editor.service";
 import { DraggableObjectCanvas } from "../components/drag/DraggableObjectCanvas";
-import type { EditorMode, SegmentExtractResponse } from "../types/editor";
+import type { CanvasTarget, EditorMode, SegmentExtractResponse } from "../types/editor";
 
 interface LocationState {
   version?: {
@@ -96,11 +97,27 @@ export function EditorPage() {
 
   const isSegmentationMode = mode === "furniture-placement" || mode === "object-move";
 
-  // Segmentation hook — active for furniture-placement and object-move
-  const selection = useSelection(isSegmentationMode ? (versionId || "") : "", getToken);
+  // Canvas target state: "base" vs "reference"
+  const [canvasTarget, setCanvasTarget] = useState<CanvasTarget>("base");
 
   // Editor prompt & generation action hook
   const editor = useEditor(versionId || "", projectId, mode, getToken);
+
+  // Dual segmentation hooks — base room image vs reference furniture image
+  const baseSelection = useSelection(isSegmentationMode ? (versionId || "") : "", getToken, {
+    isReferenceMask: false,
+  });
+  const refSelection = useSelection(isSegmentationMode ? (versionId || "") : "", getToken, {
+    isReferenceMask: true,
+    referenceUrl: editor.furnitureReferenceUrl,
+  });
+
+  const activeSelection = canvasTarget === "reference" ? refSelection : baseSelection;
+  const activeCanvasUrl =
+    canvasTarget === "reference" && editor.furnitureReferenceUrl
+      ? editor.furnitureReferenceUrl
+      : (imageUrl || "");
+  const targetName = canvasTarget === "reference" ? "Reference Furniture Image" : "Base Room Image";
 
   const [dragResult, setDragResult] = useState<SegmentExtractResponse | null>(null);
   const [isExtractingMove, setIsExtractingMove] = useState(false);
@@ -114,7 +131,7 @@ export function EditorPage() {
       
       // Clear the SAM session and reset frontend selection states after extraction is successful
       try {
-        await selection.handleClearSelection();
+        await baseSelection.handleClearSelection();
       } catch (clearErr) {
         console.warn("[Move] Failed to clear SAM session after extract:", clearErr);
       }
@@ -125,11 +142,22 @@ export function EditorPage() {
     }
   };
 
-  const handleBack = () => {
-    if (projectId) {
-      navigate(`/project/${projectId}`);
-    } else {
-      navigate("/projects");
+  const handleBack = async () => {
+    try {
+      if (versionId) {
+        await Promise.all([
+          baseSelection.handleClearSelection(),
+          refSelection.handleClearSelection(),
+        ]);
+      }
+    } catch (clearErr) {
+      console.warn("[Editor] Failed to clear SAM sessions on back:", clearErr);
+    } finally {
+      if (projectId) {
+        navigate(`/project/${projectId}`);
+      } else {
+        navigate("/projects");
+      }
     }
   };
 
@@ -194,7 +222,20 @@ export function EditorPage() {
         <span className="text-xs font-bold text-[#1b1c1c] truncate">
           {versionTitle}
         </span>
-        <div className="flex-1" />
+        <div className="flex-1 flex justify-center">
+          {isSegmentationMode && (
+            <EditorTimeline
+              mode={mode}
+              canvasTarget={canvasTarget}
+              onTargetChange={setCanvasTarget}
+              baseMaskUrl={baseSelection.combinedMask}
+              baseSelectionCount={baseSelection.selectionCount}
+              referenceImageUrl={editor.furnitureReferenceUrl}
+              referenceMaskUrl={refSelection.combinedMask}
+              referenceSelectionCount={refSelection.selectionCount}
+            />
+          )}
+        </div>
         <span className="text-[10px] font-bold text-primary/70 bg-primary/5 px-2 py-0.5 rounded border border-primary/10 uppercase tracking-wider">
           {mode === "furniture-placement"
             ? "Furniture Placement"
@@ -209,8 +250,8 @@ export function EditorPage() {
         {/* Candidate panel — only in segmentation modes */}
         {isSegmentationMode && (
           <MaskCandidatePanel
-            candidates={selection.candidateMasks}
-            onSelect={selection.handleAcceptCandidate}
+            candidates={activeSelection.candidateMasks}
+            onSelect={activeSelection.handleAcceptCandidate}
             hoveredIndex={hoveredCandidateIndex}
             onHover={setHoveredCandidateIndex}
           />
@@ -218,30 +259,36 @@ export function EditorPage() {
 
         {/* Canvas workspace */}
         <ImageCanvas
-          imageUrl={imageUrl}
-          overlayUrl={isSegmentationMode ? selection.combinedMask : null}
+          imageUrl={activeCanvasUrl}
+          overlayUrl={isSegmentationMode ? activeSelection.combinedMask : null}
           hoveredOverlayUrl={
             isSegmentationMode && hoveredCandidateIndex !== null
-              ? (selection.candidateMasks[hoveredCandidateIndex]?.overlay_url ?? null)
+              ? (activeSelection.candidateMasks[hoveredCandidateIndex]?.overlay_url ?? null)
               : null
           }
-          isSegmenting={isSegmentationMode ? selection.isSegmenting : false}
-          onSelectPoint={isSegmentationMode ? selection.handleSelectPoint : undefined}
+          isSegmenting={isSegmentationMode ? activeSelection.isSegmenting : false}
+          onSelectPoint={isSegmentationMode ? activeSelection.handleSelectPoint : undefined}
+          targetName={isSegmentationMode ? targetName : undefined}
         />
 
         {/* Right parameters and upload sidebar */}
         <EditorSidebar
           prompt={editor.prompt}
           onPromptChange={editor.setPrompt}
-          selectionCount={selection.selectionCount}
-          isSegmenting={selection.isSegmenting}
+          canvasTarget={canvasTarget}
+          onTargetChange={setCanvasTarget}
+          selectionCount={activeSelection.selectionCount}
+          isSegmenting={activeSelection.isSegmenting}
           isGenerating={editor.isGenerating || isExtractingMove}
-          clickLabels={selection.clickLabels}
-          selectedClickIndices={selection.selectedClickIndices}
-          onToggleClickIndex={selection.toggleClickIndex}
-          onRemoveClicks={selection.handleRemoveClicks}
-          onClearSelection={selection.handleClearSelection}
-          onGenerate={() => editor.handleGenerate(selection.combinedMask || "")}
+          clickLabels={activeSelection.clickLabels}
+          selectedClickIndices={activeSelection.selectedClickIndices}
+          onToggleClickIndex={activeSelection.toggleClickIndex}
+          onRemoveClicks={activeSelection.handleRemoveClicks}
+          onClearSelection={activeSelection.handleClearSelection}
+          baseMaskUrl={baseSelection.combinedMask}
+          referenceMaskUrl={refSelection.combinedMask}
+          referenceSelectionCount={refSelection.selectionCount}
+          onGenerate={() => editor.handleGenerate(baseSelection.combinedMask || "", refSelection.combinedMask || null)}
           onModify={editor.handleModify}
           onMove={handleMove}
           mode={mode}

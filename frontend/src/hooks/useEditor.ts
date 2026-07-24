@@ -41,7 +41,7 @@ export function useEditor(
 
   /** Used by furniture-placement mode (requires a SAM mask). */
   const handleGenerate = useCallback(
-    async (combinedMask: string) => {
+    async (combinedMask: string, referenceMask?: string | null) => {
       if (!combinedMask || !prompt.trim() || isGenerating) return;
 
       setIsGenerating(true);
@@ -52,17 +52,13 @@ export function useEditor(
             prompt: prompt.trim(),
             combinedMask,
             furnitureReference: mode === "furniture-placement" ? furnitureReferenceUrl : null,
+            referenceMask: mode === "furniture-placement" ? (referenceMask || null) : null,
             mode,
           },
           getToken
         );
 
-        try {
-          await EditorService.clearSelection({ versionId }, getToken);
-        } catch (clearErr) {
-          console.error("Failed to clear selection session:", clearErr);
-        }
-
+        // Immediately navigate back to Studio page where the queued node will display as a skeleton card
         navigate(`/project/${projectId}`, {
           state: { selectNodeId: res.generation.id },
         });
