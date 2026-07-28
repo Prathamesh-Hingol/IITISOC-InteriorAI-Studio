@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Box, Menu, Sliders, X, Upload, ImagePlus, Loader2, AlertCircle, Calendar, Sparkles, Eye, XCircle } from "lucide-react";
+import { useAuth } from "@clerk/clerk-react";
 import { Navbar } from "../components/layout/Navbar";
 import { LeftSidebar } from "../components/sidebar/LeftSidebar";
 import { Canvas } from "../components/workspace/Canvas";
@@ -15,13 +16,17 @@ import { useGetProjectGenerations } from "../hooks/useProjectTree";
 import { useVersionTree } from "../hooks/useVersionTree";
 import { useCreateGeneration, useDeleteGeneration } from "../hooks/useGeneration";
 import { useUploadImage } from "../hooks/useUpload";
+import { editorApi } from "../api/editor.api";
 import type { VersionNode } from "../types";
 
 export function StudioPage() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const navigate = useNavigate();
 	const location = useLocation();
-	const navState = location.state as { selectNodeId?: string } | null;
+	const { getToken } = useAuth();
+	// clearSessionId is the parent versionId whose SAM session must be cleared once
+	// the newly-queued generation reaches a terminal state (completed / failed).
+	const navState = location.state as { selectNodeId?: string; clearSessionId?: string } | null;
 
 	const {
 		pan,
@@ -52,6 +57,37 @@ export function StudioPage() {
 			selectNode(navState.selectNodeId);
 		}
 	}, [navState?.selectNodeId, generations, selectNode]);
+
+	// Track which clearSessionId has already been cleared so we fire at most once.
+	const clearedSessionRef = useRef<string | null>(null);
+
+	// Clear both SAM sessions (base + reference) once the newly-queued generation
+	// transitions to a terminal state. This fires through the existing backend
+	// /editor/clear-selection route which proxies to the SAM microservice.
+	useEffect(() => {
+		const clearSessionId = navState?.clearSessionId;
+		const targetId = navState?.selectNodeId;
+		if (!clearSessionId || !targetId) return;
+		if (clearedSessionRef.current === clearSessionId) return;
+
+		const targetGen = (generations as Array<{ id: string; status: string }>)
+			.find((g) => g.id === targetId);
+		if (!targetGen) return;
+
+		// Only act once we know the job is done (either way)
+		if (targetGen.status !== "completed" && targetGen.status !== "failed") return;
+
+		clearedSessionRef.current = clearSessionId;
+		console.log(`[StudioPage] Generation ${targetId} reached '${targetGen.status}'. Clearing SAM session ${clearSessionId}.`);
+
+		// Fire both clears in parallel — errors are non-fatal; session will expire on SAM side anyway.
+		Promise.all([
+			editorApi.clearSelection({ versionId: clearSessionId, reference_mask: false }, getToken),
+			editorApi.clearSelection({ versionId: clearSessionId, reference_mask: true }, getToken),
+		]).catch((err) => {
+			console.warn("[StudioPage] SAM clear-session failed (non-fatal):", err);
+		});
+	}, [generations, navState?.selectNodeId, navState?.clearSessionId, getToken]);
 
 	// Fullscreen Preview Modal state
 	const [previewNode, setPreviewNode] = useState<VersionNode | null>(null);

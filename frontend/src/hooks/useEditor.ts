@@ -58,9 +58,11 @@ export function useEditor(
           getToken
         );
 
-        // Immediately navigate back to Studio page where the queued node will display as a skeleton card
+        // Navigate back to Studio. Pass clearSessionId (the parent versionId) so StudioPage
+        // can fire the SAM segment/clear calls once the generation actually reaches
+        // a terminal state (completed / failed) — not just when the job is queued.
         navigate(`/project/${projectId}`, {
-          state: { selectNodeId: res.generation.id },
+          state: { selectNodeId: res.generation.id, clearSessionId: versionId },
         });
       } catch (err) {
         console.error("Generation failed:", err);

@@ -90,16 +90,8 @@ async function executeGenerationJob(type: "ROOT" | "BRANCH" | "EDITOR", payload:
     }
     console.log(`[Worker EDITOR] Extracted Output Image URL: ${outUrl}`);
 
-    // Clear SAM microservice session AFTER the image is generated
-    try {
-      console.log(`[Worker EDITOR] Clearing SAM session for session_id: ${data.session_id} after generation`);
-      await Promise.all([
-        axios.post(`${endpoint}/segment/clear`, { session_id: data.session_id, reference_mask: false }, { timeout: 10_000 }).catch(() => undefined),
-        axios.post(`${endpoint}/segment/clear`, { session_id: data.session_id, reference_mask: true }, { timeout: 10_000 }).catch(() => undefined),
-      ]);
-    } catch (clearErr: any) {
-      console.warn(`[Worker EDITOR] SAM clear session warning:`, clearErr.message);
-    }
+    // SAM session cleanup is now handled by the frontend via POST /editor/clear-selection
+    // after the generation is queued (reference_mask: false + reference_mask: true).
 
     return outUrl;
   } catch (axiosErr: any) {
