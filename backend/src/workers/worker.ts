@@ -1,3 +1,4 @@
+import http from "http";
 import axios, { type AxiosResponse } from "axios";
 import { Worker } from "bullmq";
 import { prisma } from "../config/db";
@@ -195,9 +196,19 @@ worker.on("error", (err) => {
   console.error(`[Worker EVENT ERROR] Worker encountered error:`, err);
 });
 
+// Minimal HTTP server so Render detects an open port and confirms deployment.
+const PORT = parseInt(process.env.PORT ?? "3001", 10);
+const healthServer = http.createServer((_req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Worker OK");
+});
+
 async function start() {
   await prisma.$connect();
   await connectRedis();
+  healthServer.listen(PORT, () => {
+    console.log(`[Worker HEALTH] Health-check server listening on port ${PORT}`);
+  });
   console.log(`[Worker START] AI generation worker initialized and listening on queue '${AI_GENERATION_QUEUE}'.`);
 }
 
@@ -208,6 +219,7 @@ void start().catch((error: unknown) => {
 
 async function shutdown() {
   console.log("[Worker SHUTDOWN] Shutting down worker gracefully...");
+  healthServer.close();
   await worker.close();
   await Promise.all([prisma.$disconnect(), disconnectRedis()]);
   process.exit(0);
