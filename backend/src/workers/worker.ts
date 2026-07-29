@@ -209,11 +209,17 @@ const healthServer = http.createServer((req, res) => {
 });
 
 async function start() {
+  // Start the HTTP health server FIRST so Render's port scanner detects it immediately.
+  // Render injects PORT as an env var; the worker must bind to it before doing any async work.
+  await new Promise<void>((resolve) => {
+    healthServer.listen(PORT, () => {
+      console.log(`[Worker HEALTH] Health-check server listening on port ${PORT}`);
+      resolve();
+    });
+  });
+
   await prisma.$connect();
   await connectRedis();
-  healthServer.listen(PORT, () => {
-    console.log(`[Worker HEALTH] Health-check server listening on port ${PORT}`);
-  });
   console.log(`[Worker START] AI generation worker initialized and listening on queue '${AI_GENERATION_QUEUE}'.`);
 }
 
