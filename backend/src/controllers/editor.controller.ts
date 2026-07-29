@@ -7,6 +7,7 @@ import type { AxiosResponse } from "axios";
 import dotenv from "dotenv";
 import { enqueueGeneration } from "../queues/ai-generation.queue";
 import { editorJobPayloadSchema } from "../queues/generation-job.schemas";
+import { enhancePrompt } from "../config/promptEnhancer";
 
 dotenv.config();
 
@@ -54,19 +55,19 @@ const segmentExtractRequestSchema = z.object({
 
 // ─── Types ───────────────────────────────────────────────────
 interface candidateRes {
-	candidate_index:number,
-	score:number,
-	overlay_url:string,
+	candidate_index: number;
+	score: number;
+	overlay_url: string;
 }
 interface SAMSegmentResponse {
-	session_id:string,
-	click_index:number,
-	candidates:candidateRes[]
+	session_id: string;
+	click_index: number;
+	candidates: candidateRes[];
 }
 
 interface SAMAcceptResponse {
-	status:string,
-    running_overlay_url:string,// Base64 PNG mask data URL or image URL
+	status: string;
+	running_overlay_url: string; // Base64 PNG mask data URL or image URL
 }
 
 interface SAMActionResponse {
@@ -74,13 +75,13 @@ interface SAMActionResponse {
 }
 
 interface SAMRemoveClicksResponse {
-	status:string,
-    running_overlay_url: string,
-	active_indices:number[],
+	status: string;
+	running_overlay_url: string;
+	active_indices: number[];
 }
 
 interface GenerationResponse {
-	output_url:string
+	output_url: string;
 }
 
 // Response returned by the SAM microservice /segment/extract route.
@@ -166,10 +167,15 @@ export async function segment(req: Request, res: Response, next: NextFunction) {
 				.json({ error: "Version not found or unauthorized" });
 		}
 		const isRef = validated.reference_mask ?? false;
-		const targetImageUrl = isRef && validated.referenceUrl ? validated.referenceUrl : generation.imageUrl;
-		const targetSessionId =validated.versionId;
+		const targetImageUrl =
+			isRef && validated.referenceUrl
+				? validated.referenceUrl
+				: generation.imageUrl;
+		const targetSessionId = validated.versionId;
 
-		console.log(`[Segment] Target Image: ${targetImageUrl}, RefMask: ${isRef}, Session: ${targetSessionId}`);
+		console.log(
+			`[Segment] Target Image: ${targetImageUrl}, RefMask: ${isRef}, Session: ${targetSessionId}`,
+		);
 		console.log(`x:${validated.x},y:${validated.y}`);
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
@@ -186,8 +192,8 @@ export async function segment(req: Request, res: Response, next: NextFunction) {
 							session_id: targetSessionId,
 							cx: validated.x,
 							cy: validated.y,
-							max_dem:1024,
-							reference_mask:isRef,
+							max_dem: 1024,
+							reference_mask: isRef,
 						},
 						{
 							headers: { "Content-Type": "application/json" },
@@ -253,7 +259,7 @@ export async function acceptCandidate(
 		}
 
 		const isRef = validated.reference_mask ?? false;
-		const targetSessionId =validated.versionId;
+		const targetSessionId = validated.versionId;
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
@@ -267,13 +273,12 @@ export async function acceptCandidate(
 						{
 							session_id: targetSessionId,
 							candidate_index: validated.maskIndex,
-							reference_mask:isRef,
+							reference_mask: isRef,
 						},
 						{
 							headers: { "Content-Type": "application/json" },
 						},
 					);
-
 
 				return res.json({
 					combinedMaskUrl: samResponse.data.running_overlay_url,
@@ -336,7 +341,7 @@ export async function removeClicks(
 		}
 
 		const isRef = validated.reference_mask ?? false;
-		const targetSessionId =validated.versionId;
+		const targetSessionId = validated.versionId;
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
@@ -350,7 +355,7 @@ export async function removeClicks(
 						{
 							session_id: targetSessionId,
 							click_indices: validated.clickIndices,
-							reference_mask:isRef,
+							reference_mask: isRef,
 						},
 						{ headers: { "Content-Type": "application/json" } },
 					);
@@ -425,16 +430,18 @@ export async function clearSelection(
 		}
 
 		const isRef = validated.reference_mask ?? false;
-		const targetSessionId =validated.versionId;
+		const targetSessionId = validated.versionId;
 		const samEndpoint = process.env.SAM_ENDPOINT;
 
 		if (samEndpoint) {
 			try {
-				console.log(`[SAM-Clear] Requesting session clear from SAM (Ref: ${isRef})`);
+				console.log(
+					`[SAM-Clear] Requesting session clear from SAM (Ref: ${isRef})`,
+				);
 				await axios.post(
 					`${samEndpoint}/segment/clear`,
-					{ session_id: targetSessionId,reference_mask:isRef, },
-					{ headers: { "Content-Type": "application/json" }},
+					{ session_id: targetSessionId, reference_mask: isRef },
+					{ headers: { "Content-Type": "application/json" } },
 				);
 			} catch (samError: any) {
 				console.error("SAM clear failed:", samError.message);
@@ -492,14 +499,27 @@ export async function generate(
 		});
 		const nextIndex = totalGens + 1;
 		const title = `V${nextIndex}: ${validated.mode === "furniture-placement" ? "Furniture" : "Interior"} Edit`;
+
+		// ── Prompt Enhancement ──────────────────────────────────────────────
+		const enhancedEditor = await enhancePrompt(validated.prompt, "fill");
+		if (enhancedEditor === null) {
+			return res.status(400).json({ error: "Invalid prompt" });
+		}
+
 		const payload = editorJobPayloadSchema.parse({
-			prompt: validated.prompt,
+			prompt: enhancedEditor,
 			session_id: parentNode.id,
 			image_url: parentNode.imageUrl,
 			mask_url: validated.combinedMask,
 			reference_image_url: validated.furnitureReference || null,
 			reference_mask_url: validated.referenceMask || null,
 			edit_mode: validated.mode,
+			steps: 18,
+			guidance: 35,
+			dilate_px: 45,
+			seed: 0,
+			tile_size: 704,
+			teacache_thresh: 0.25,
 		});
 
 		// Create a pending generation in DB
@@ -509,7 +529,7 @@ export async function generate(
 				projectId: parentNode.projectId,
 				parentId: validated.versionId,
 				imageUrl: parentNode.imageUrl, // placeholder during generation
-				prompt: validated.prompt,
+				prompt: enhancedEditor,
 				preset: parentNode.preset || "Scandinavian",
 				creativityStrength: parentNode.creativityStrength || 65,
 				generationMode:
@@ -525,10 +545,18 @@ export async function generate(
 			await enqueueGeneration(dbGen.id);
 		} catch (queueError) {
 			await prisma.$transaction([
-				prisma.generation.update({ where: { id: dbGen.id }, data: { status: "failed" } }),
-				prisma.generationJob.update({ where: { generationId: dbGen.id }, data: {
-					status: "FAILED", failedAt: new Date(), failureMessage: "Unable to queue generation",
-				}}),
+				prisma.generation.update({
+					where: { id: dbGen.id },
+					data: { status: "failed" },
+				}),
+				prisma.generationJob.update({
+					where: { generationId: dbGen.id },
+					data: {
+						status: "FAILED",
+						failedAt: new Date(),
+						failureMessage: "Unable to queue generation",
+					},
+				}),
 			]);
 			throw queueError;
 		}
@@ -545,7 +573,10 @@ export async function generate(
 		});
 	} catch (error) {
 		if (error instanceof z.ZodError) {
-			console.error("[Generate API Error] Validation Failed:", JSON.stringify(error.errors, null, 2));
+			console.error(
+				"[Generate API Error] Validation Failed:",
+				JSON.stringify(error.errors, null, 2),
+			);
 			return res
 				.status(400)
 				.json({ error: "Validation failed", details: error.errors });
@@ -606,9 +637,13 @@ export async function segmentExtract(
 						},
 					);
 
-				const { clean_bg_url, cutout_url, depth_preview_url, placement_meta }: SAMExtractResponse =
-					samResponse.data;
-					console.log(clean_bg_url);
+				const {
+					clean_bg_url,
+					cutout_url,
+					depth_preview_url,
+					placement_meta,
+				}: SAMExtractResponse = samResponse.data;
+				console.log(clean_bg_url);
 				return res.json({
 					backgroundUrl: clean_bg_url,
 					cutoutUrl: cutout_url,
@@ -625,7 +660,9 @@ export async function segmentExtract(
 		}
 
 		// Mock Fallback
-		console.warn("[SAM-Extract] Using mock fallback — set SAM_ENDPOINT in .env for real extraction.");
+		console.warn(
+			"[SAM-Extract] Using mock fallback — set SAM_ENDPOINT in .env for real extraction.",
+		);
 		// Use 512, 512 as center point for the mock cutout
 		const mock = {
 			clean_bg_url: generation.imageUrl,

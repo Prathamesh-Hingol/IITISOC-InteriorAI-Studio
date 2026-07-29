@@ -127,14 +127,10 @@ export function EditorPage() {
     setIsExtractingMove(true);
     try {
       const res = await EditorService.segmentExtract({ versionId }, getToken);
+      // SAM /segment/extract consumes the session server-side, no need to
+      // call /segment/clear — just reset the frontend selection state locally.
+      baseSelection.clearCandidates();
       setDragResult(res);
-      
-      // Clear the SAM session and reset frontend selection states after extraction is successful
-      try {
-        await baseSelection.handleClearSelection();
-      } catch (clearErr) {
-        console.warn("[Move] Failed to clear SAM session after extract:", clearErr);
-      }
     } catch (err) {
       console.error("Failed to extract object for dragging:", err);
     } finally {

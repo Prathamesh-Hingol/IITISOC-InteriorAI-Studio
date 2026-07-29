@@ -5,6 +5,7 @@ import axios, { type AxiosResponse } from "axios";
 import dotenv from "dotenv";
 import { enqueueGeneration } from "../queues/ai-generation.queue";
 import { branchJobPayloadSchema } from "../queues/generation-job.schemas";
+import { enhancePrompt } from "../config/promptEnhancer";
 
 dotenv.config();
 
@@ -77,6 +78,13 @@ export async function createGeneration(
 				title = "V1: Text to Image Base";
 				promptText = validatedData.prompt;
 
+				// ── Prompt Enhancement ──────────────────────────────────────────────
+				const enhancedRoot = await enhancePrompt(promptText, "schnell");
+				if (enhancedRoot === null) {
+					return res.status(400).json({ error: "Invalid prompt" });
+				}
+				promptText = enhancedRoot;
+
 				// ── Synchronous text-to-image via FLUX Schnell ──────────────────────
 				// The request blocks here until the image is ready (up to 5 min).
 				// The frontend keeps the onboarding screen visible (isLoading=true)
@@ -136,7 +144,13 @@ export async function createGeneration(
 
 			const generationIndex = totalGens + 1;
 			const title = `V${generationIndex}: ${preset} Luxe`;
-			const payload = branchJobPayloadSchema.parse({ prompt, image_url: parentNode.imageUrl });
+
+			// ── Prompt Enhancement ──────────────────────────────────────────────
+			const enhancedBranch = await enhancePrompt(prompt, "kontext");
+			if (enhancedBranch === null) {
+				return res.status(400).json({ error: "Invalid prompt" });
+			}
+			const payload = branchJobPayloadSchema.parse({ prompt: enhancedBranch, image_url: parentNode.imageUrl });
 
 			// 1. Save Pending Generation in DB
 			const dbGen = await prisma.generation.create({
@@ -145,7 +159,7 @@ export async function createGeneration(
 					projectId: validatedData.projectId,
 					parentId,
 					imageUrl: parentNode.imageUrl, // Temporary imageUrl during pending state
-					prompt,
+					prompt: enhancedBranch,
 					preset,
 					creativityStrength: strength,
 					generationMode: mode,
