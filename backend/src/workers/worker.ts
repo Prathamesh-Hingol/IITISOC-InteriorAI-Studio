@@ -197,7 +197,7 @@ worker.on("error", (err) => {
 });
 
 // Minimal HTTP server so Render detects an open port and confirms deployment.
-const PORT = parseInt(process.env.PORT2 ?? "3001", 10);
+const PORT = parseInt(process.env.PORT?? "3001", 10);
 const healthServer = http.createServer((req, res) => {
   if (req.url === "/health" && req.method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json" });
