@@ -514,12 +514,6 @@ export async function generate(
 			reference_image_url: validated.furnitureReference || null,
 			reference_mask_url: validated.referenceMask || null,
 			edit_mode: validated.mode,
-			steps: 18,
-			guidance: 35,
-			dilate_px: 45,
-			seed: 0,
-			tile_size: 704,
-			teacache_thresh: 0.25,
 		});
 
 		// Create a pending generation in DB
