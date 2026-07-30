@@ -250,7 +250,9 @@ export function EditorPage() {
             onSelect={activeSelection.handleAcceptCandidate}
             hoveredIndex={hoveredCandidateIndex}
             onHover={setHoveredCandidateIndex}
+            isSegmenting={activeSelection.isSegmenting}
           />
+
         )}
 
         {/* Canvas workspace */}

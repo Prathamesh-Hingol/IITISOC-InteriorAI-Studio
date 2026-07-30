@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { Link } from "react-router-dom";
@@ -11,12 +13,25 @@ import {
 	Armchair,
 	History,
 	Sparkles,
+	X,
 } from "lucide-react";
 import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
 import bg from "../assets/bg.png";
 
+const DEMO_VIDEO_ID = "rKqAWeZCwNU";
+
 export function LandingPage() {
+	const [isDemoOpen, setIsDemoOpen] = useState(false);
+
+	useEffect(() => {
+		if (!isDemoOpen) return;
+		const handleKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setIsDemoOpen(false);
+		};
+		window.addEventListener("keydown", handleKey);
+		return () => window.removeEventListener("keydown", handleKey);
+	}, [isDemoOpen]);
 	const containerVariants: Variants = {
 		hidden: { opacity: 0 },
 		visible: {
@@ -40,6 +55,7 @@ export function LandingPage() {
 	};
 
 	return (
+		<>
 		<div className="min-h-screen flex flex-col bg-[#fbf9f9]">
 			<Navbar />
 
@@ -108,7 +124,7 @@ export function LandingPage() {
 							<ArrowRight size={16} />
 						</Link>
 						<button
-							onClick={() => alert("Watch Demo Video")}
+							onClick={() => setIsDemoOpen(true)}
 							className="inline-flex items-center justify-center gap-2 bg-white/70 hover:bg-white text-on-surface border border-[#c0c8c5] text-sm font-semibold px-6 h-11 rounded-lg transition-all duration-200 shadow-sm backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]"
 						>
 							<Play
@@ -337,6 +353,62 @@ export function LandingPage() {
 			</section>
 
 			<Footer />
-		</div>
+			</div>
+
+			{/* ── Demo Video Modal ─────────────────────────────────────── */}
+			{isDemoOpen && createPortal(
+				<motion.div
+					initial={{ opacity: 0 }}
+					animate={{ opacity: 1 }}
+					exit={{ opacity: 0 }}
+					transition={{ duration: 0.25 }}
+					className="fixed inset-0 z-[300] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-8"
+					onClick={() => setIsDemoOpen(false)}
+				>
+					{/* Modal container — stop clicks propagating to backdrop */}
+					<motion.div
+						initial={{ scale: 0.93, opacity: 0, y: 16 }}
+						animate={{ scale: 1, opacity: 1, y: 0 }}
+						exit={{ scale: 0.93, opacity: 0, y: 16 }}
+						transition={{ type: "spring", stiffness: 280, damping: 26 }}
+						className="relative w-full max-w-4xl"
+						onClick={(e) => e.stopPropagation()}
+					>
+						{/* Close button */}
+						<button
+							type="button"
+							onClick={() => setIsDemoOpen(false)}
+							className="absolute -top-10 right-0 flex items-center gap-1.5 text-white/60 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+							aria-label="Close demo video"
+						>
+							<X size={14} />
+							<span>Close</span>
+							<span className="text-white/30 text-[10px] ml-1">(Esc)</span>
+						</button>
+
+						{/* Video wrapper — 16:9 aspect ratio */}
+						<div className="w-full aspect-video rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
+							<iframe
+								src={`https://www.youtube.com/embed/${DEMO_VIDEO_ID}?autoplay=1&rel=0&modestbranding=1&color=white`}
+								title="InteriorAI Studio — Demo Video"
+								allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+								allowFullScreen
+								className="w-full h-full border-0"
+							/>
+						</div>
+
+						{/* Caption bar */}
+						<div className="mt-3 flex items-center justify-between px-1">
+							<p className="text-white/50 text-[11px] font-medium">
+								InteriorAI Studio · Full Product Walkthrough
+							</p>
+							<span className="text-white/30 text-[10px]">~2 min</span>
+						</div>
+					</motion.div>
+				</motion.div>,
+				document.body
+			)}
+		</>
 	);
 }
+

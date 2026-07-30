@@ -145,12 +145,7 @@ export async function createGeneration(
 			const generationIndex = totalGens + 1;
 			const title = `V${generationIndex}: ${preset} Luxe`;
 
-			// ── Prompt Enhancement ──────────────────────────────────────────────
-			const enhancedBranch = await enhancePrompt(prompt, "kontext");
-			if (enhancedBranch === null) {
-				return res.status(400).json({ error: "Invalid prompt" });
-			}
-			const payload = branchJobPayloadSchema.parse({ prompt: enhancedBranch, image_url: parentNode.imageUrl });
+			const payload = branchJobPayloadSchema.parse({ prompt, image_url: parentNode.imageUrl });
 
 			// 1. Save Pending Generation in DB
 			const dbGen = await prisma.generation.create({
@@ -159,7 +154,7 @@ export async function createGeneration(
 					projectId: validatedData.projectId,
 					parentId,
 					imageUrl: parentNode.imageUrl, // Temporary imageUrl during pending state
-					prompt: enhancedBranch,
+					prompt: prompt,
 					preset,
 					creativityStrength: strength,
 					generationMode: mode,
