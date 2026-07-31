@@ -260,9 +260,9 @@ InteriorAI Studio connects to dedicated AI model micro-services and inference pi
 
 | AI Service / Capability | Description & Model Architecture | Repository / Service Target |
 | :--- | :--- | :--- |
-| **Room Restyle & Furnishing Pipeline** | ControlNet / Stable Diffusion micro-service taking input room photos, prompt parameters, and design presets to generate photorealistic interior variations. | [InteriorAI Generation Backend Repository](https://github.com/Prathamesh-Hingol/IITISOC-InteriorAI-Studio) |
-| **3D Depth Estimation Service** | Monocular depth map estimation (MiDaS / Depth Anything / ZoeDepth) generating 16-bit depth textures for interactive Three.js 3D room rendering. | [InteriorAI Depth Estimation Micro-Service](https://github.com/Prathamesh-Hingol/IITISOC-InteriorAI-Studio) |
-| **Inpainting & Region Mask Editor** | Mask-guided Stable Diffusion Inpainting service for region-level furniture editing and targeted room redesign. | [InteriorAI Inpainting & Mask Pipeline](https://github.com/Prathamesh-Hingol/IITISOC-InteriorAI-Studio) |
+| **Room Restyle & Furnishing Pipeline** | ControlNet / Stable Diffusion micro-service taking input room photos, prompt parameters, and design presets to generate photorealistic interior variations. | [InteriorAI Generation Backend Repository](https://github.com/MayankKhoria2007/IITI-SOC-26-AI-ML-023.git) |
+| **3D Depth Estimation Service** | Monocular depth map estimation (MiDaS / Depth Anything / ZoeDepth) generating 16-bit depth textures for interactive Three.js 3D room rendering. | [InteriorAI Depth Estimation Micro-Service](https://github.com/MayankKhoria2007/IITI-SOC-26-AI-ML-023.git) |
+| **Inpainting & Region Mask Editor** | Mask-guided Stable Diffusion Inpainting service for region-level furniture editing and targeted room redesign. | [InteriorAI Inpainting & Mask Pipeline](https://github.com/MayankKhoria2007/IITI-SOC-26-AI-ML-023.git) |
 
 ---
 
