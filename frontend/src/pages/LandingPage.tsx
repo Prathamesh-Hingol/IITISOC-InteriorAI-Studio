@@ -19,7 +19,7 @@ import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
 import bg from "../assets/bg.png";
 
-const DEMO_VIDEO_ID = "rKqAWeZCwNU";
+const DEMO_VIDEO_ID = "H0jAGXm3a3c";
 
 export function LandingPage() {
 	const [isDemoOpen, setIsDemoOpen] = useState(false);
